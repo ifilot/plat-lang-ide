@@ -126,12 +126,25 @@ install(TARGETS plat_lang_ide
 )
 
 if(WIN32)
-    qt_generate_deploy_app_script(
-        TARGET plat_lang_ide
-        OUTPUT_SCRIPT qt_deploy_script
-        NO_UNSUPPORTED_PLATFORM_ERROR
+    find_program(WINDEPLOYQT_EXECUTABLE
+        NAMES windeployqt6 windeployqt
+        REQUIRED
     )
-    install(SCRIPT ${qt_deploy_script})
+    find_program(LDD_EXECUTABLE
+        NAMES ldd
+        REQUIRED
+    )
+    find_program(CYGPATH_EXECUTABLE
+        NAMES cygpath
+        REQUIRED
+    )
+
+    configure_file(
+        cmake/DeployWindowsRuntime.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/DeployWindowsRuntime.cmake
+        @ONLY
+    )
+    install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/generated/DeployWindowsRuntime.cmake)
 endif()
 
 install(FILES

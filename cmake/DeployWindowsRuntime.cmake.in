@@ -1,0 +1,128 @@
+set(_deploy_prefix "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}")
+if(_deploy_prefix STREQUAL "")
+    set(_deploy_prefix ".")
+endif()
+
+set(_deploy_bin_dir "${_deploy_prefix}/@CMAKE_INSTALL_BINDIR@")
+set(_deploy_plugins_dir "${_deploy_prefix}/plugins")
+set(_deploy_app "${_deploy_bin_dir}/plat_lang_ide.exe")
+
+if(NOT EXISTS "${_deploy_app}")
+    message(FATAL_ERROR "Cannot deploy runtime dependencies; ${_deploy_app} does not exist")
+endif()
+
+message(STATUS "Deploying Qt runtime dependencies for ${_deploy_app}")
+execute_process(
+    COMMAND "@WINDEPLOYQT_EXECUTABLE@"
+        --release
+        --force
+        --compiler-runtime
+        --dir "${_deploy_bin_dir}"
+        --plugindir "${_deploy_plugins_dir}"
+        "${_deploy_app}"
+    RESULT_VARIABLE _windeployqt_result
+)
+if(_windeployqt_result)
+    message(FATAL_ERROR "windeployqt failed with exit code ${_windeployqt_result}")
+endif()
+
+file(WRITE "${_deploy_bin_dir}/qt.conf" "[Paths]\nPrefix=..\nPlugins=plugins\n")
+
+function(_plat_lang_collect_binaries out_var)
+    file(GLOB_RECURSE _binaries
+        LIST_DIRECTORIES false
+        "${_deploy_bin_dir}/*.dll"
+        "${_deploy_bin_dir}/*.exe"
+        "${_deploy_plugins_dir}/*.dll"
+    )
+    set(${out_var} ${_binaries} PARENT_SCOPE)
+endfunction()
+
+function(_plat_lang_normalize_dependency_path path out_var)
+    set(_normalized_path "${path}")
+    if(path MATCHES "^/")
+        execute_process(
+            COMMAND "@CYGPATH_EXECUTABLE@" -m "${path}"
+            OUTPUT_VARIABLE _cygpath_output
+            ERROR_VARIABLE _cygpath_error
+            RESULT_VARIABLE _cygpath_result
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(_cygpath_result)
+            message(FATAL_ERROR "cygpath failed for ${path}: ${_cygpath_error}")
+        endif()
+        set(_normalized_path "${_cygpath_output}")
+    endif()
+
+    set(${out_var} "${_normalized_path}" PARENT_SCOPE)
+endfunction()
+
+function(_plat_lang_should_bundle_dependency path out_var)
+    string(TOLOWER "${path}" _lower_path)
+    string(TOLOWER "${_deploy_prefix}/" _lower_prefix)
+    string(FIND "${_lower_path}" "${_lower_prefix}" _prefix_position)
+
+    set(_should_bundle TRUE)
+    if(_lower_path MATCHES "^/c/windows/" OR
+       _lower_path MATCHES "^/[a-z]/windows/" OR
+       _lower_path MATCHES "^[a-z]:/windows/" OR
+       _lower_path MATCHES "/windows/system32/" OR
+       _lower_path MATCHES "/windows/syswow64/" OR
+       _lower_path MATCHES "/api-ms-" OR
+       _lower_path MATCHES "/ext-ms-" OR
+       _prefix_position EQUAL 0)
+        set(_should_bundle FALSE)
+    endif()
+
+    set(${out_var} ${_should_bundle} PARENT_SCOPE)
+endfunction()
+
+_plat_lang_collect_binaries(_scan_queue)
+set(_scanned)
+set(_copied)
+
+while(_scan_queue)
+    list(POP_FRONT _scan_queue _binary)
+    if(_binary IN_LIST _scanned)
+        continue()
+    endif()
+    list(APPEND _scanned "${_binary}")
+
+    execute_process(
+        COMMAND "@LDD_EXECUTABLE@" "${_binary}"
+        OUTPUT_VARIABLE _ldd_output
+        ERROR_VARIABLE _ldd_error
+        RESULT_VARIABLE _ldd_result
+    )
+    if(_ldd_result)
+        message(FATAL_ERROR "ldd failed for ${_binary}: ${_ldd_error}")
+    endif()
+    if(_ldd_output MATCHES "not found")
+        message(FATAL_ERROR "ldd found unresolved dependencies for ${_binary}:\n${_ldd_output}")
+    endif()
+
+    string(REGEX MATCHALL "(/[A-Za-z]/[^ \t\r\n]+|/[^ \t\r\n]+|[A-Za-z]:/[^ \t\r\n]+)\\.[dD][lL][lL]" _dependencies "${_ldd_output}")
+    foreach(_dependency IN LISTS _dependencies)
+        _plat_lang_normalize_dependency_path("${_dependency}" _dependency)
+        if(NOT EXISTS "${_dependency}")
+            continue()
+        endif()
+
+        _plat_lang_should_bundle_dependency("${_dependency}" _should_bundle)
+        if(NOT _should_bundle)
+            continue()
+        endif()
+
+        get_filename_component(_dependency_name "${_dependency}" NAME)
+        set(_installed_dependency "${_deploy_bin_dir}/${_dependency_name}")
+        if(NOT EXISTS "${_installed_dependency}")
+            message(STATUS "Bundling runtime dependency ${_dependency_name}")
+            file(COPY "${_dependency}" DESTINATION "${_deploy_bin_dir}")
+            list(APPEND _copied "${_installed_dependency}")
+            list(APPEND _scan_queue "${_installed_dependency}")
+        endif()
+    endforeach()
+endwhile()
+
+list(LENGTH _copied _copied_count)
+message(STATUS "Bundled ${_copied_count} additional runtime dependencies from ldd")

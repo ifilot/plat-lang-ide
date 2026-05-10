@@ -69,6 +69,19 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Verify Windows runtime payload
+        run: |
+          cmake --install build --prefix package-root
+          test -f package-root/bin/plat_lang_ide.exe
+          test -f package-root/bin/Qt6Core.dll
+          test -f package-root/bin/Qt6Gui.dll
+          test -f package-root/bin/Qt6Widgets.dll
+          test -f package-root/bin/Qt6Svg.dll
+          test -f package-root/bin/libgcc_s_seh-1.dll
+          test -f package-root/bin/libstdc++-6.dll
+          test -f package-root/bin/libwinpthread-1.dll
+          test -f package-root/plugins/platforms/qwindows.dll
+
       - name: Package installer
         run: cpack --config build/CPackConfig.cmake -G NSIS -B dist
 
