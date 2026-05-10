@@ -96,7 +96,7 @@ void CodeHighlighter::rebuild_rules()
 
     const QStringList keywords = {
         "aafbraeke", "angesj", "enj", "es", "funksie", "loat", "trok",
-        "veur", "weier", "zolang"
+        "euversjlaon", "veur", "zolang"
     };
 
     for (const QString &keyword : keywords) {

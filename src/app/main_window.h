@@ -13,6 +13,7 @@ class CodeAssistantPanel;
 class EditorTabs;
 class FileExplorerPanel;
 class FindReplaceBar;
+class QNetworkAccessManager;
 class TerminalPanel;
 class TitleBar;
 
@@ -194,7 +195,7 @@ private slots:
     void configure_interpreter();
 
     /**
-     * Refreshes the development compiler and reports update status.
+     * Checks whether the active interpreter matches the latest semver tag.
      */
     void check_compiler_updates();
 
@@ -255,6 +256,13 @@ private:
      */
     void execute_command(const QString &command_id);
 
+    /**
+     * Checks the companion compiler repository for the newest semver tag.
+     *
+     * @param user_initiated Whether to print an explicit check-start message.
+     */
+    void check_latest_interpreter_version(bool user_initiated);
+
 protected:
     /**
      * Keeps custom titlebar controls synced with window state changes.
@@ -271,6 +279,8 @@ private:
     TerminalPanel *terminal_panel_;
     CodeAssistantPanel *code_assistant_;
     CompilerToolchain compiler_toolchain_;
+    QNetworkAccessManager *interpreter_version_network_;
+    bool interpreter_version_check_in_progress_;
     QAction *run_current_file_action_;
     QAction *stop_process_action_;
     QAction *file_explorer_action_;

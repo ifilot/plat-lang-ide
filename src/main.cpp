@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFileInfo>
 #include <QIcon>
 
@@ -32,6 +33,23 @@ int main(int argc, char *argv[])
         } else {
             startup_message = "Startup folder ignored because it is not a directory: "
                               + app.arguments().at(1);
+        }
+    } else {
+        const QStringList candidate_example_paths = {
+            QDir::current().absoluteFilePath("examples"),
+            QDir(QCoreApplication::applicationDirPath())
+                .absoluteFilePath("../examples"),
+            QDir(QCoreApplication::applicationDirPath())
+                .absoluteFilePath("../../examples")
+        };
+
+        for (const QString &path : candidate_example_paths) {
+            QFileInfo file_info(QDir::cleanPath(path));
+
+            if (file_info.isDir()) {
+                startup_folder = file_info.absoluteFilePath();
+                break;
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 #ifndef COMPILER_TOOLCHAIN_H
 #define COMPILER_TOOLCHAIN_H
 
+#include <QByteArray>
 #include <QString>
 
 /**
@@ -48,6 +49,16 @@ public:
      */
     Status install_compiler(const QString &source_path,
                             const QString &version = "custom");
+
+    /**
+     * Installs compiler executable bytes into local toolchain storage.
+     *
+     * @param compiler_data Compiler executable contents.
+     * @param version Semver tag to store.
+     * @return Current toolchain status after installation.
+     */
+    Status install_compiler_data(const QByteArray &compiler_data,
+                                 const QString &version);
 
 private:
     /**

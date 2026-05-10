@@ -85,6 +85,45 @@ CompilerToolchain::Status CompilerToolchain::install_compiler(
     return status();
 }
 
+CompilerToolchain::Status CompilerToolchain::install_compiler_data(
+    const QByteArray &compiler_data, const QString &version)
+{
+    if (compiler_data.isEmpty()) {
+        Status result = status();
+        result.available = false;
+        result.message = "Downloaded compiler was empty.";
+        return result;
+    }
+
+    QDir().mkpath(version_directory(version));
+    QString target_path = compiler_path_for_version(version);
+    QFile::remove(target_path);
+
+    QFile target_file(target_path);
+
+    if (!target_file.open(QIODevice::WriteOnly)) {
+        Status result = status();
+        result.available = false;
+        result.message = "Could not write compiler to: " + target_path;
+        return result;
+    }
+
+    qint64 bytes_written = target_file.write(compiler_data);
+    target_file.close();
+
+    if (bytes_written != compiler_data.size()) {
+        QFile::remove(target_path);
+        Status result = status();
+        result.available = false;
+        result.message = "Could not finish writing compiler to: " + target_path;
+        return result;
+    }
+
+    make_executable(target_path);
+    set_active_version(version);
+    return status();
+}
+
 QString CompilerToolchain::compiler_file_name() const
 {
 #ifdef Q_OS_WIN

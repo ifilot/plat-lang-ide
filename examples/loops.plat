@@ -5,7 +5,7 @@
 
 veur i = 0, 10:
     es i == 3:
-        weier
+        euversjlaon
     enj
 
     es i == 8:

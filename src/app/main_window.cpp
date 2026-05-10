@@ -10,13 +10,22 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QProcess>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSplitter>
 #include <QTextDocument>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -32,6 +41,29 @@
 #include "terminal_panel.h"
 #include "title_bar.h"
 
+namespace {
+constexpr const char *latest_interpreter_release_url =
+    "https://api.github.com/repos/ifilot/plat-lang/releases/latest";
+
+bool is_semver_tag(const QString &tag)
+{
+    static const QRegularExpression semver_pattern(
+        R"(^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$)");
+    return semver_pattern.match(tag).hasMatch();
+}
+
+bool asset_matches_current_platform(const QString &asset_name)
+{
+    QString lower_name = asset_name.toLower();
+
+#ifdef Q_OS_WIN
+    return lower_name.contains("windows") && lower_name.endsWith(".exe");
+#else
+    return lower_name.contains("linux") && !lower_name.endsWith(".exe");
+#endif
+}
+}
+
 MainWindow::MainWindow(const QString &startup_folder,
                        const QString &startup_message,
                        QWidget *parent)
@@ -42,6 +74,8 @@ MainWindow::MainWindow(const QString &startup_folder,
       bottom_panel_(new BottomPanel(this)),
       terminal_panel_(bottom_panel_->terminal_panel()),
       code_assistant_(new CodeAssistantPanel(this)),
+      interpreter_version_network_(new QNetworkAccessManager(this)),
+      interpreter_version_check_in_progress_(false),
       run_current_file_action_(nullptr),
       stop_process_action_(nullptr),
       file_explorer_action_(nullptr),
@@ -173,6 +207,10 @@ MainWindow::MainWindow(const QString &startup_folder,
         bottom_panel_->append_output_message("Explorer root: "
                                              + file_explorer_->root_directory());
     }
+
+    QTimer::singleShot(0, this, [this]() {
+        check_latest_interpreter_version(false);
+    });
 }
 
 void MainWindow::setup_menu_bar()
@@ -641,10 +679,154 @@ void MainWindow::check_compiler_updates()
     terminal_panel_->show_message(toolchain_status.message);
     bottom_panel_->append_output_message("Checked local development compiler for updates.");
     bottom_panel_->append_output_message(toolchain_status.message);
-    terminal_panel_->show_message(
-        "GitHub update downloads are not configured in the IDE yet.");
-    bottom_panel_->append_output_message(
-        "GitHub update downloads are not configured in the IDE yet.");
+    check_latest_interpreter_version(true);
+}
+
+void MainWindow::check_latest_interpreter_version(bool user_initiated)
+{
+    auto report = [this](const QString &message) {
+        terminal_panel_->show_message(message);
+        bottom_panel_->append_output_message(message);
+    };
+
+    if (interpreter_version_check_in_progress_) {
+        if (user_initiated) {
+            report("Interpreter release check is already running.");
+        }
+
+        return;
+    }
+
+    interpreter_version_check_in_progress_ = true;
+
+    if (user_initiated) {
+        report("Checking latest platlang interpreter release.");
+    }
+
+    QNetworkRequest request{QUrl(latest_interpreter_release_url)};
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setRawHeader("User-Agent", "plat-lang-ide");
+
+    QNetworkReply *reply = interpreter_version_network_->get(request);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, report]() {
+        reply->deleteLater();
+        interpreter_version_check_in_progress_ = false;
+
+        if (reply->error() != QNetworkReply::NoError) {
+            report("Could not check latest platlang interpreter release: "
+                   + reply->errorString());
+            return;
+        }
+
+        QJsonParseError parse_error;
+        QJsonDocument document = QJsonDocument::fromJson(reply->readAll(),
+                                                         &parse_error);
+
+        if (parse_error.error != QJsonParseError::NoError
+            || !document.isObject()) {
+            report("Could not read latest platlang interpreter release.");
+            return;
+        }
+
+        QJsonObject release = document.object();
+        QString tag = release.value("tag_name").toString();
+
+        if (!is_semver_tag(tag)) {
+            report("Latest platlang interpreter release does not use a semver tag.");
+            return;
+        }
+
+        QString release_url = release.value("html_url").toString(
+            "https://github.com/ifilot/plat-lang/releases");
+        QString download_url;
+        const QJsonArray assets = release.value("assets").toArray();
+
+        for (const QJsonValue &asset_value : assets) {
+            QJsonObject asset = asset_value.toObject();
+            QString asset_name = asset.value("name").toString();
+
+            if (asset_matches_current_platform(asset_name)) {
+                download_url = asset.value("browser_download_url").toString();
+                break;
+            }
+        }
+
+        CompilerToolchain::Status toolchain_status = compiler_toolchain_.status();
+
+        if (toolchain_status.available && toolchain_status.active_version == tag) {
+            report("platlang interpreter is up to date (" + tag + ").");
+            return;
+        }
+
+        QString current_version = toolchain_status.active_version.isEmpty()
+                                      ? "none"
+                                      : toolchain_status.active_version;
+        QString prompt_text = "Latest platlang interpreter: " + tag
+                              + "\nInstalled interpreter: " + current_version
+                              + "\n\nDownload and install the latest interpreter?";
+
+        QMessageBox prompt(this);
+        prompt.setWindowTitle("Download platlang Interpreter");
+        prompt.setText(prompt_text);
+        prompt.setIcon(QMessageBox::Information);
+        QPushButton *download_button =
+            prompt.addButton("Download", QMessageBox::AcceptRole);
+        QPushButton *release_button =
+            prompt.addButton("Open Release", QMessageBox::ActionRole);
+        prompt.addButton("Later", QMessageBox::RejectRole);
+        prompt.setDefaultButton(download_button);
+        prompt.exec();
+
+        if (prompt.clickedButton() == release_button) {
+            QDesktopServices::openUrl(QUrl(release_url));
+            report("Opened platlang interpreter release " + tag + ".");
+            return;
+        }
+
+        if (prompt.clickedButton() != download_button) {
+            report("Skipped platlang interpreter download for " + tag + ".");
+            return;
+        }
+
+        if (download_url.isEmpty()) {
+            report("No platlang interpreter asset is available for this platform in "
+                   + tag + ".");
+            QDesktopServices::openUrl(QUrl(release_url));
+            return;
+        }
+
+        report("Downloading platlang interpreter " + tag + ".");
+
+        QNetworkRequest download_request{QUrl(download_url)};
+        download_request.setRawHeader("Accept", "application/octet-stream");
+        download_request.setRawHeader("User-Agent", "plat-lang-ide");
+
+        QNetworkReply *download_reply =
+            interpreter_version_network_->get(download_request);
+
+        connect(download_reply, &QNetworkReply::finished, this,
+                [this, download_reply, tag, report]() {
+                    download_reply->deleteLater();
+
+                    if (download_reply->error() != QNetworkReply::NoError) {
+                        report("Could not download platlang interpreter "
+                               + tag + ": "
+                               + download_reply->errorString());
+                        return;
+                    }
+
+                    CompilerToolchain::Status installed_status =
+                        compiler_toolchain_.install_compiler_data(
+                            download_reply->readAll(), tag);
+                    report(installed_status.message);
+
+                    if (installed_status.available
+                        && installed_status.active_version == tag) {
+                        report("Installed latest platlang interpreter " + tag + ".");
+                    }
+                });
+    });
 }
 
 void MainWindow::show_command_palette()
