@@ -1,0 +1,9 @@
+# Dit veurbeeld löit zeen wie `loat` eine naam vastleit.
+# Mit `+` kins te tekste aan-ein hange.
+# `aafdrokke` sjrief de oetkóms nao de terminal.
+
+loat naam = "Jan"
+loat taal = "plat-lang"
+
+aafdrokke("Hallo, " + naam)
+aafdrokke("Welkom bie " + taal)

@@ -1,0 +1,16 @@
+# `es` kiek of eine waerde veur plat-lang es woar telt.
+# Ein laege teks, `niks`, `neetwoar`, 0 en ein laeg mepke telle neet es woar.
+# `angesj:` is de tak dae geloape weurt es de veurwaerde neet es woar telt.
+
+loat naam = ""
+loat truukval = "onbekend"
+
+es naam:
+    aafdrokke(naam)
+angesj:
+    aafdrokke(truukval)
+enj
+
+es niks:
+    aafdrokke("dit versjient neet")
+enj

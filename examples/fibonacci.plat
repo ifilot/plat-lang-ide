@@ -1,0 +1,15 @@
+# Dit veurbeeld löit eine funksie zeen dae zichzelf weer opruip.
+# `funksie` mak eine globale funksie.
+# `trok` geuf eine waerde truuk aan daegein dae de funksie oproop.
+
+funksie viefkes(getal):
+    # Es `getal` kleiner es 2 is, hubbe veer de kleinsjte stap.
+    es getal < 2:
+        trok getal
+    angesj:
+        # Angesj telle veer de twie veurige viefkes-waerde bie-ein.
+        trok viefkes(getal - 1) + viefkes(getal - 2)
+    enj
+enj
+
+aafdrokke(viefkes(10))

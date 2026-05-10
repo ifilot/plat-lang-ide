@@ -1,0 +1,101 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*.*.*"
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            cmake \
+            g++ \
+            ninja-build \
+            qt6-base-dev \
+            qt6-svg-dev
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+  windows:
+    name: Windows compile and package
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            base-devel
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-svg
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Package installer
+        run: cpack --config build/CPackConfig.cmake -G NSIS -B dist
+
+      - name: Smoke test installer
+        run: |
+          installer="$(find dist -maxdepth 1 -name '*.exe' | head -n 1)"
+          test -n "$installer"
+          install_dir="$(cygpath -w "$PWD/installed")"
+          "$installer" /S "/D=$install_dir"
+          test -f installed/bin/plat_lang_ide.exe
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plat-lang-ide-windows-installer
+          path: dist/*.exe
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            Write-Host "Skipping release for non-version tag $tag"
+            exit 0
+          }
+          $installer = Get-ChildItem -Path dist -Filter *.exe | Select-Object -First 1
+          gh release create $tag $installer.FullName --title $tag --generate-notes

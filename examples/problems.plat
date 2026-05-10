@@ -1,0 +1,19 @@
+# Intentionally broken example for testing the IDE Problems panel.
+# This file should not compile cleanly.
+
+loat naam = "Jan"
+
+# Expected: parse/syntax error near the missing closing parenthesis.
+aafdrokke("Hallo, " + naam
+
+# Expected: unknown identifier or name-resolution error.
+aafdrokke(onbekende_naam)
+
+# Expected: parse/syntax error near the missing ':' after the condition.
+es naam
+    aafdrokke("Deze tak mist eine dubbele punt")
+enj
+
+# Expected: unterminated block or unexpected end of file.
+zolang woar:
+    aafdrokke("Deze lus weurt neet aafgesjlaote")

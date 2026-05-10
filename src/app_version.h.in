@@ -1,0 +1,14 @@
+#ifndef APP_VERSION_H
+#define APP_VERSION_H
+
+/**
+ * Returns the IDE version from the CMake project version.
+ *
+ * @return Application version string.
+ */
+inline const char *app_version()
+{
+    return "@PROJECT_VERSION@";
+}
+
+#endif

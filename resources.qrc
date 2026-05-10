@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file>assets/fonts/space-mono/SpaceMono-Regular.ttf</file>
+        <file>assets/fonts/space-mono/SpaceMono-Bold.ttf</file>
+        <file>assets/icons/fontawesome/solid/file.svg</file>
+        <file>assets/icons/fontawesome/solid/folder.svg</file>
+    </qresource>
+</RCC>

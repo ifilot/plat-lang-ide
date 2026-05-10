@@ -1,0 +1,18 @@
+# Ein `mepke` is de einige samengestelde waerde in plat-lang.
+# Detzelfde mepke kin diene es verzameling van naeme en waerde,
+# mer ouch es reeks dae bie nul begint.
+
+loat gebroeker = {
+    naam = "Alice",
+    leefteid = 30,
+}
+
+loat nommers = { 10, 20, 30, }
+loat veld = "naam"
+
+# Punt-sjrieverie en blokhaok-sjrieverie kinne dezelfde waerde pakke.
+aafdrokke(gebroeker.naam)
+aafdrokke(gebroeker[veld])
+
+# Reekse beginne bie 0, dus `nommers[0]` is de ierste waerde.
+aafdrokke(nommers[0])

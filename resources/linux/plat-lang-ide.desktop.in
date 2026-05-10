@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=plat-lang IDE
+Comment=A Qt-based IDE for the platlang language
+Exec=plat_lang_ide %F
+Icon=plat-lang-ide
+Terminal=false
+Categories=Development;IDE;
+MimeType=text/x-platlang;

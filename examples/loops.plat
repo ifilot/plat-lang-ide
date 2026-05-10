@@ -1,0 +1,16 @@
+# `veur i = 0, 10:` luip van 0 tot, mer neet mit, 10.
+# Det is de Dijkstra-manier: de rechtergrens huurt neet derbie.
+# `weier` sjpring nao de volgende rónj.
+# `aafbraeke` sjtóp de lus hielendal.
+
+veur i = 0, 10:
+    es i == 3:
+        weier
+    enj
+
+    es i == 8:
+        aafbraeke
+    enj
+
+    aafdrokke(i)
+enj
