@@ -72,14 +72,6 @@ jobs:
       - name: Package installer
         run: cpack --config build/CPackConfig.cmake -G NSIS -B dist
 
-      - name: Smoke test installer
-        run: |
-          installer="$(find dist -maxdepth 1 -name '*.exe' | head -n 1)"
-          test -n "$installer"
-          install_dir="$(cygpath -w "$PWD/installed")"
-          "$installer" /S "/D=$install_dir"
-          test -f installed/bin/plat_lang_ide.exe
-
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:

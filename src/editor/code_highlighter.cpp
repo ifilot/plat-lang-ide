@@ -111,7 +111,7 @@ void CodeHighlighter::rebuild_rules()
                           literal_format_});
     }
 
-    rules_.push_back({QRegularExpression("\\b(and|or)\\b"), logical_format_});
+    rules_.push_back({QRegularExpression("\\b(en|of)\\b"), logical_format_});
     rules_.push_back({QRegularExpression("\\baafdrokke\\b"), builtin_format_});
 }
 
