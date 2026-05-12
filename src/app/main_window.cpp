@@ -1163,6 +1163,7 @@ void MainWindow::use_light_theme()
 {
     ThemeManager::apply_theme(*qApp, ThemeManager::Theme::Light);
     editor_tabs_->apply_theme(ThemeManager::Theme::Light);
+    terminal_panel_->apply_theme();
     title_bar_->apply_theme(ThemeManager::Theme::Light);
     update_theme_actions(ThemeManager::Theme::Light);
 }
@@ -1171,6 +1172,7 @@ void MainWindow::use_dark_theme()
 {
     ThemeManager::apply_theme(*qApp, ThemeManager::Theme::Dark);
     editor_tabs_->apply_theme(ThemeManager::Theme::Dark);
+    terminal_panel_->apply_theme();
     title_bar_->apply_theme(ThemeManager::Theme::Dark);
     update_theme_actions(ThemeManager::Theme::Dark);
 }

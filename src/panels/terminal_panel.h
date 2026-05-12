@@ -2,7 +2,10 @@
 #define TERMINAL_PANEL_H
 
 #include <QProcess>
+#include <QString>
 #include <QWidget>
+
+#include <vector>
 
 class QColor;
 class QEvent;
@@ -62,6 +65,11 @@ public:
      */
     void show_message(const QString &text);
 
+    /**
+     * Repaints existing terminal output with the active theme colors.
+     */
+    void apply_theme();
+
 signals:
     /**
      * Emitted when the user requests running the active file.
@@ -108,6 +116,11 @@ private:
         MutedInfo
     };
 
+    struct TerminalEntry {
+        QString text;
+        TerminalTextKind kind;
+    };
+
     /**
      * Appends one terminal line with a lightweight prefix.
      *
@@ -115,6 +128,14 @@ private:
      * @param kind Visual style to use.
      */
     void append_terminal_text(const QString &text, TerminalTextKind kind);
+
+    /**
+     * Inserts one terminal line without changing the stored transcript.
+     *
+     * @param text Text to insert.
+     * @param kind Visual style to use.
+     */
+    void insert_terminal_text(const QString &text, TerminalTextKind kind);
 
     /**
      * Returns the text color for a terminal message kind.
@@ -134,6 +155,7 @@ private:
     QPushButton *run_button_;
     QPushButton *send_button_;
     QString current_run_target_path_;
+    std::vector<TerminalEntry> terminal_entries_;
     bool current_run_target_can_run_;
 };
 

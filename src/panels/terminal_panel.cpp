@@ -69,6 +69,7 @@ void TerminalPanel::start_process(const QString &program,
     }
 
     output_->clear();
+    terminal_entries_.clear();
     if (!working_directory.isEmpty()) {
         process_->setWorkingDirectory(working_directory);
     }
@@ -109,6 +110,15 @@ void TerminalPanel::set_run_target(const QString &path, bool can_run)
 void TerminalPanel::show_message(const QString &text)
 {
     append_terminal_text(text, TerminalTextKind::MutedInfo);
+}
+
+void TerminalPanel::apply_theme()
+{
+    output_->clear();
+
+    for (const TerminalEntry &entry : terminal_entries_) {
+        insert_terminal_text(entry.text, entry.kind);
+    }
 }
 
 void TerminalPanel::stop_process()
@@ -189,6 +199,13 @@ void TerminalPanel::retranslate_ui()
 }
 
 void TerminalPanel::append_terminal_text(const QString &text,
+                                         TerminalTextKind kind)
+{
+    terminal_entries_.push_back({text, kind});
+    insert_terminal_text(text, kind);
+}
+
+void TerminalPanel::insert_terminal_text(const QString &text,
                                          TerminalTextKind kind)
 {
     QTextCharFormat format;
