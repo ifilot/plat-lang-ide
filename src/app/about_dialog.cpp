@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QLabel>
+#include <QCoreApplication>
 #include <QSysInfo>
 #include <QTextBrowser>
 #include <QVBoxLayout>
@@ -14,7 +15,8 @@ namespace AboutDialog {
 void show(QWidget *parent)
 {
     QDialog dialog(parent);
-    dialog.setWindowTitle("About plat-lang IDE");
+    dialog.setWindowTitle(QCoreApplication::translate("AboutDialog",
+                                                      "About plat-lang IDE"));
     dialog.setModal(true);
     dialog.resize(460, 360);
 
@@ -25,11 +27,12 @@ void show(QWidget *parent)
     title->setFont(title_font);
 
     auto *version = new QLabel(
-        QString("Version %1").arg(app_version()), &dialog);
+        QCoreApplication::translate("AboutDialog", "Version %1")
+            .arg(app_version()), &dialog);
 
     auto *details = new QTextBrowser(&dialog);
     details->setOpenExternalLinks(true);
-    details->setHtml(QString(R"(
+    details->setHtml(QCoreApplication::translate("AboutDialog", R"(
 <p>A Qt-based IDE for the <b>platlang</b> language.</p>
 <p><b>Qt:</b> %1<br>
 <b>Platform:</b> %2</p>

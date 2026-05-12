@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets Svg)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets Svg LinguistTools)
 
 configure_file(
     src/app_version.h.in
@@ -64,14 +64,29 @@ qt_add_executable(plat_lang_ide
     src/panels/terminal_panel.h
     src/services/app_fonts.cpp
     src/services/app_fonts.h
+    src/services/app_language.cpp
+    src/services/app_language.h
     src/services/compiler_toolchain.cpp
     src/services/compiler_toolchain.h
+    src/services/file_dialog_locations.cpp
+    src/services/file_dialog_locations.h
     src/services/file_icon_provider.cpp
     src/services/file_icon_provider.h
+    src/services/interpreter_settings.cpp
+    src/services/interpreter_settings.h
+    src/services/recent_files.cpp
+    src/services/recent_files.h
     src/ui/theme_manager.cpp
     src/ui/theme_manager.h
     src/ui/title_bar.cpp
     src/ui/title_bar.h
+)
+
+qt_add_translations(plat_lang_ide
+    TS_FILES
+        translations/plat_lang_ide_li.ts
+        translations/plat_lang_ide_nl.ts
+    RESOURCE_PREFIX "/i18n"
 )
 
 if(WIN32)
@@ -90,6 +105,12 @@ qt_add_resources(plat_lang_ide app_resources
         assets/icons/fontawesome/solid/xmark.svg
         assets/themes/dark.qss
         assets/themes/light.qss
+        examples/conditions.plat
+        examples/fibonacci.plat
+        examples/hello.plat
+        examples/loops.plat
+        examples/problems.plat
+        examples/tables.plat
         logos/plat-lang-logo.svg
 )
 

@@ -4,6 +4,7 @@
 #include <QDialog>
 
 #include "compiler_toolchain.h"
+#include "interpreter_settings.h"
 #include "theme_manager.h"
 
 class QComboBox;
@@ -33,8 +34,24 @@ public:
      */
     ThemeManager::Theme selected_theme() const;
 
+    /**
+     * Returns the selected interpreter argument preset.
+     *
+     * @return Selected interpreter argument preset.
+     */
+    InterpreterSettings::ArgumentPreset selected_interpreter_argument_preset() const;
+
+    /**
+     * Returns the selected UI language code.
+     *
+     * @return Selected language code.
+     */
+    QString selected_language() const;
+
 private:
     QComboBox *theme_combo_;
+    QComboBox *language_combo_;
+    QComboBox *interpreter_arguments_combo_;
 };
 
 #endif

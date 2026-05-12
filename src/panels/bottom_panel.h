@@ -5,6 +5,7 @@
 
 class OutputPanel;
 class ProblemsPanel;
+class QEvent;
 class QTabWidget;
 class TerminalPanel;
 
@@ -53,6 +54,14 @@ public:
      */
     void set_tab_visible(Tab tab, bool visible);
 
+    /**
+     * Returns whether a bottom tab is visible.
+     *
+     * @param tab Tab to inspect.
+     * @return True when the tab is visible.
+     */
+    bool is_tab_visible(Tab tab) const;
+
 private:
     /**
      * Converts a tab enum to a QTabWidget index.
@@ -66,6 +75,9 @@ private:
      * Keeps the container hidden when all tabs are hidden.
      */
     void update_visibility();
+
+    void changeEvent(QEvent *event) override;
+    void retranslate_ui();
 
     QTabWidget *tabs_;
     TerminalPanel *terminal_panel_;

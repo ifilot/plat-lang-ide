@@ -4,6 +4,7 @@
 #include <QWidget>
 
 class QLabel;
+class QEvent;
 
 /**
  * Placeholder surface for diagnostics and compiler problems.
@@ -20,6 +21,9 @@ public:
     explicit ProblemsPanel(QWidget *parent = nullptr);
 
 private:
+    void changeEvent(QEvent *event) override;
+    void retranslate_ui();
+
     QLabel *empty_state_;
 };
 

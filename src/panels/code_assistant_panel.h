@@ -5,6 +5,7 @@
 
 class QTextBrowser;
 class QLineEdit;
+class QEvent;
 
 /**
  * Provides the code assistant conversation panel.
@@ -21,6 +22,9 @@ public:
     explicit CodeAssistantPanel(QWidget *parent = nullptr);
 
 private:
+    void changeEvent(QEvent *event) override;
+    void retranslate_ui();
+
     QTextBrowser *conversation_;
     QLineEdit *prompt_input_;
 };

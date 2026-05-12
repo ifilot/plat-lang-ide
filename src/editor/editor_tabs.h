@@ -45,6 +45,14 @@ public:
     bool open_file(const QString &path);
 
     /**
+     * Opens text as an unsaved editor document.
+     *
+     * @param title Tab title to show.
+     * @param contents Text contents.
+     */
+    void open_text_copy(const QString &title, const QString &contents);
+
+    /**
      * Opens a new untitled editor.
      */
     void new_file();

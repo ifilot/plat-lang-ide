@@ -13,6 +13,7 @@
 #include <algorithm>
 
 #include "code_editor.h"
+#include "file_dialog_locations.h"
 #include "text_file_io.h"
 
 EditorTabs::EditorTabs(QWidget *parent)
@@ -66,8 +67,8 @@ bool EditorTabs::open_file(const QString &path)
     }
 
     if (TextFileIo::is_binary_file(canonical_path)) {
-        QMessageBox::information(this, "Binary file skipped",
-                                 "The selected file appears to be binary.");
+        QMessageBox::information(this, tr("Binary file skipped"),
+                                 tr("The selected file appears to be binary."));
         return false;
     }
 
@@ -76,7 +77,7 @@ bool EditorTabs::open_file(const QString &path)
         TextFileIo::read_utf8_file(canonical_path, &error);
 
     if (!contents.has_value()) {
-        QMessageBox::warning(this, "Unable to open file", error);
+        QMessageBox::warning(this, tr("Unable to open file"), error);
         return false;
     }
 
@@ -89,11 +90,20 @@ bool EditorTabs::open_file(const QString &path)
     return true;
 }
 
+void EditorTabs::open_text_copy(const QString &title, const QString &contents)
+{
+    auto *editor = new CodeEditor(this);
+    editor->setPlainText(contents);
+    editor->set_diagnostics({});
+    editor->document()->setModified(false);
+    add_editor_tab(editor, title);
+}
+
 void EditorTabs::new_file()
 {
     auto *editor = new CodeEditor(this);
     editor->set_diagnostics({});
-    add_editor_tab(editor, "untitled.plat");
+    add_editor_tab(editor, tr("untitled.plat"));
 }
 
 bool EditorTabs::save_current_file()
@@ -119,7 +129,7 @@ bool EditorTabs::save_current_file_as(const QString &path)
     QString error;
 
     if (!TextFileIo::write_utf8_file(path, editor->toPlainText(), &error)) {
-        QMessageBox::warning(this, "Unable to save file", error);
+        QMessageBox::warning(this, tr("Unable to save file"), error);
         return false;
     }
 
@@ -366,29 +376,38 @@ bool EditorTabs::save_editor_at_index(int index, bool prompt_for_path)
     }
 
     QString path = tabBar()->tabData(index).toString();
+    bool chose_path_in_dialog = false;
 
     if (prompt_for_path || path.isEmpty()) {
+        QString file_name = editor->property("base_tab_title").toString();
+
         path = QFileDialog::getSaveFileName(
             this,
-            "Save File",
-            editor->property("base_tab_title").toString(),
-            "platlang Files (*.plat);;All Files (*)");
+            tr("Save File"),
+            FileDialogLocations::start_path(file_name),
+            tr("platlang Files (*.plat);;All Files (*)"));
 
         if (path.isEmpty()) {
             return false;
         }
+
+        chose_path_in_dialog = true;
     }
 
     QString error;
 
     if (!TextFileIo::write_utf8_file(path, editor->toPlainText(), &error)) {
-        QMessageBox::warning(this, "Unable to save file", error);
+        QMessageBox::warning(this, tr("Unable to save file"), error);
         return false;
     }
 
     set_editor_path(index, path);
     editor->document()->setModified(false);
     update_editor_tab_title(editor);
+
+    if (chose_path_in_dialog) {
+        FileDialogLocations::remember_file_path(path);
+    }
 
     if (index == currentIndex()) {
         emit current_file_changed(current_file_path());
@@ -408,8 +427,8 @@ bool EditorTabs::confirm_close_editor(int index)
     QString title = editor->property("base_tab_title").toString();
     QMessageBox::StandardButton choice = QMessageBox::question(
         this,
-        "Save changes?",
-        "Save changes to " + title + " before closing?",
+        tr("Save changes?"),
+        tr("Save changes to %1 before closing?").arg(title),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
         QMessageBox::Save);
 
@@ -463,7 +482,7 @@ void EditorTabs::install_close_button(int index)
     button->setFixedSize(18, 18);
     button->setAutoRaise(true);
     button->setFocusPolicy(Qt::NoFocus);
-    button->setToolTip("Close editor");
+    button->setToolTip(tr("Close editor"));
 
     connect(button, &QToolButton::clicked, this, [this, button]() {
         int tab_index = -1;
@@ -487,5 +506,5 @@ void EditorTabs::open_initial_document()
 {
     auto *editor = new CodeEditor(this);
     editor->set_diagnostics({});
-    add_editor_tab(editor, "untitled.plat");
+    add_editor_tab(editor, tr("untitled.plat"));
 }

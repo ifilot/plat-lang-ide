@@ -1,9 +1,9 @@
 #include <QApplication>
 #include <QCoreApplication>
-#include <QDir>
 #include <QFileInfo>
 #include <QIcon>
 
+#include "app_language.h"
 #include "main_window.h"
 #include "theme_manager.h"
 
@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName("plat-lang");
     QCoreApplication::setApplicationName("plat-lang IDE");
+    AppLanguage::install_translator(app);
     app.setWindowIcon(QIcon(":/logos/plat-lang-logo.svg"));
     ThemeManager::apply_theme(app, ThemeManager::load_theme());
 
@@ -31,25 +32,10 @@ int main(int argc, char *argv[])
         if (file_info.isDir()) {
             startup_folder = file_info.absoluteFilePath();
         } else {
-            startup_message = "Startup folder ignored because it is not a directory: "
+            startup_message = QCoreApplication::translate(
+                                  "main",
+                                  "Startup folder ignored because it is not a directory: ")
                               + app.arguments().at(1);
-        }
-    } else {
-        const QStringList candidate_example_paths = {
-            QDir::current().absoluteFilePath("examples"),
-            QDir(QCoreApplication::applicationDirPath())
-                .absoluteFilePath("../examples"),
-            QDir(QCoreApplication::applicationDirPath())
-                .absoluteFilePath("../../examples")
-        };
-
-        for (const QString &path : candidate_example_paths) {
-            QFileInfo file_info(QDir::cleanPath(path));
-
-            if (file_info.isDir()) {
-                startup_folder = file_info.absoluteFilePath();
-                break;
-            }
         }
     }
 

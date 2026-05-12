@@ -4,6 +4,7 @@
 #include <QWidget>
 
 class QTextBrowser;
+class QEvent;
 
 /**
  * Shows IDE-level informational output separate from program I/O.
@@ -27,6 +28,9 @@ public:
     void append_message(const QString &text);
 
 private:
+    void changeEvent(QEvent *event) override;
+    void retranslate_ui();
+
     QTextBrowser *output_;
 };
 

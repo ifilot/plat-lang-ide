@@ -2,9 +2,41 @@
 
 #include <QColor>
 #include <QFont>
-#include <QStringList>
 
 namespace {
+enum class SyntaxRole {
+    Builtin,
+    Keyword,
+    Literal,
+    Logical,
+};
+
+struct SyntaxWord {
+    const char *word;
+    SyntaxRole role;
+};
+
+// Hand-edit this table to add, remove, rename, or recolor platlang words.
+// The role controls which syntax color/style is applied in apply_theme().
+constexpr SyntaxWord kSyntaxWords[] = {
+    {"aafbraeke", SyntaxRole::Keyword},
+    {"aafdrokke", SyntaxRole::Builtin},
+    {"angesj", SyntaxRole::Keyword},
+    {"en", SyntaxRole::Logical},
+    {"enj", SyntaxRole::Keyword},
+    {"es", SyntaxRole::Keyword},
+    {"euversjlaon", SyntaxRole::Keyword},
+    {"funksie", SyntaxRole::Keyword},
+    {"loat", SyntaxRole::Keyword},
+    {"neetwoar", SyntaxRole::Literal},
+    {"niks", SyntaxRole::Literal},
+    {"of", SyntaxRole::Logical},
+    {"trok", SyntaxRole::Keyword},
+    {"veur", SyntaxRole::Keyword},
+    {"woar", SyntaxRole::Literal},
+    {"zolang", SyntaxRole::Keyword},
+};
+
 /**
  * Finds the first platlang comment marker outside a string literal.
  *
@@ -94,25 +126,29 @@ void CodeHighlighter::rebuild_rules()
 {
     rules_.clear();
 
-    const QStringList keywords = {
-        "aafbraeke", "angesj", "enj", "es", "funksie", "loat", "trok",
-        "euversjlaon", "veur", "zolang"
-    };
+    for (const SyntaxWord &syntax_word : kSyntaxWords) {
+        QTextCharFormat format;
 
-    for (const QString &keyword : keywords) {
-        rules_.push_back({QRegularExpression("\\b" + keyword + "\\b"),
-                          keyword_format_});
+        switch (syntax_word.role) {
+        case SyntaxRole::Builtin:
+            format = builtin_format_;
+            break;
+        case SyntaxRole::Keyword:
+            format = keyword_format_;
+            break;
+        case SyntaxRole::Literal:
+            format = literal_format_;
+            break;
+        case SyntaxRole::Logical:
+            format = logical_format_;
+            break;
+        }
+
+        rules_.push_back({
+            QRegularExpression(QStringLiteral("\\b%1\\b").arg(syntax_word.word)),
+            format
+        });
     }
-
-    const QStringList literals = {"neetwoar", "niks", "woar"};
-
-    for (const QString &literal : literals) {
-        rules_.push_back({QRegularExpression("\\b" + literal + "\\b"),
-                          literal_format_});
-    }
-
-    rules_.push_back({QRegularExpression("\\b(en|of)\\b"), logical_format_});
-    rules_.push_back({QRegularExpression("\\baafdrokke\\b"), builtin_format_});
 }
 
 void CodeHighlighter::highlightBlock(const QString &text)

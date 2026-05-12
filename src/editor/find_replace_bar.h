@@ -6,6 +6,8 @@
 class QLineEdit;
 class QLabel;
 class QPushButton;
+class QToolButton;
+class QEvent;
 
 /**
  * Compact find and replace controls for the active editor.
@@ -67,11 +69,18 @@ signals:
     void replace_all_requested();
 
 private:
+    void changeEvent(QEvent *event) override;
+    void retranslate_ui();
+
+    QLabel *find_label_;
     QLineEdit *find_input_;
     QLabel *replace_label_;
     QLineEdit *replace_input_;
+    QPushButton *previous_button_;
+    QPushButton *next_button_;
     QPushButton *replace_button_;
     QPushButton *replace_all_button_;
+    QToolButton *close_button_;
 };
 
 #endif

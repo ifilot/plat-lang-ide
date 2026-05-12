@@ -1,5 +1,6 @@
 #include "bottom_panel.h"
 
+#include <QEvent>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -20,15 +21,32 @@ BottomPanel::BottomPanel(QWidget *parent)
       problems_panel_(new ProblemsPanel(this)),
       output_panel_(new OutputPanel(this))
 {
-    tabs_->addTab(terminal_panel_, "Terminal");
-    tabs_->addTab(problems_panel_, "Problems");
-    tabs_->addTab(output_panel_, "Output");
+    tabs_->addTab(terminal_panel_, QString());
+    tabs_->addTab(problems_panel_, QString());
+    tabs_->addTab(output_panel_, QString());
+    retranslate_ui();
     tabs_->setCurrentIndex(terminal_tab_index);
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
     layout->addWidget(tabs_, 1);
+}
+
+void BottomPanel::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+
+    if (event->type() == QEvent::LanguageChange) {
+        retranslate_ui();
+    }
+}
+
+void BottomPanel::retranslate_ui()
+{
+    tabs_->setTabText(terminal_tab_index, tr("Terminal"));
+    tabs_->setTabText(problems_tab_index, tr("Problems"));
+    tabs_->setTabText(output_tab_index, tr("Output"));
 }
 
 TerminalPanel *BottomPanel::terminal_panel() const
@@ -51,6 +69,11 @@ void BottomPanel::set_tab_visible(Tab tab, bool visible)
     }
 
     update_visibility();
+}
+
+bool BottomPanel::is_tab_visible(Tab tab) const
+{
+    return tabs_->isTabVisible(tab_index(tab));
 }
 
 int BottomPanel::tab_index(Tab tab) const

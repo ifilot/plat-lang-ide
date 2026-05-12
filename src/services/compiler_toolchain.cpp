@@ -9,6 +9,11 @@
 
 namespace {
 constexpr const char *dev_version = "dev";
+
+QString translate_toolchain(const char *text)
+{
+    return QCoreApplication::translate("CompilerToolchain", text);
+}
 }
 
 CompilerToolchain::CompilerToolchain()
@@ -39,7 +44,8 @@ CompilerToolchain::Status CompilerToolchain::status() const
 
     if (result.active_version.isEmpty()) {
         result.available = false;
-        result.message = "No platlang compiler has been installed yet.";
+        result.message =
+            translate_toolchain("No platlang compiler has been installed yet.");
         return result;
     }
 
@@ -47,11 +53,17 @@ CompilerToolchain::Status CompilerToolchain::status() const
     result.available = QFileInfo::exists(result.compiler_path);
 
     if (result.available) {
-        result.message = "Using platlang compiler " + result.active_version
-                         + " from AppData.";
+        result.message =
+            QCoreApplication::translate(
+                "CompilerToolchain",
+                "Using platlang compiler %1 from AppData.")
+                .arg(result.active_version);
     } else {
-        result.message = "Configured platlang compiler is missing: "
-                         + result.compiler_path;
+        result.message =
+            QCoreApplication::translate(
+                "CompilerToolchain",
+                "Configured platlang compiler is missing: %1")
+                .arg(result.compiler_path);
     }
 
     return result;
@@ -65,7 +77,11 @@ CompilerToolchain::Status CompilerToolchain::install_compiler(
     if (!source_info.isFile()) {
         Status result = status();
         result.available = false;
-        result.message = "Selected compiler is not a file: " + source_path;
+        result.message =
+            QCoreApplication::translate(
+                "CompilerToolchain",
+                "Selected compiler is not a file: %1")
+                .arg(source_path);
         return result;
     }
 
@@ -76,7 +92,11 @@ CompilerToolchain::Status CompilerToolchain::install_compiler(
     if (!QFile::copy(source_info.absoluteFilePath(), target_path)) {
         Status result = status();
         result.available = false;
-        result.message = "Could not copy compiler to: " + target_path;
+        result.message =
+            QCoreApplication::translate(
+                "CompilerToolchain",
+                "Could not copy compiler to: %1")
+                .arg(target_path);
         return result;
     }
 
@@ -91,7 +111,7 @@ CompilerToolchain::Status CompilerToolchain::install_compiler_data(
     if (compiler_data.isEmpty()) {
         Status result = status();
         result.available = false;
-        result.message = "Downloaded compiler was empty.";
+        result.message = translate_toolchain("Downloaded compiler was empty.");
         return result;
     }
 
@@ -104,7 +124,11 @@ CompilerToolchain::Status CompilerToolchain::install_compiler_data(
     if (!target_file.open(QIODevice::WriteOnly)) {
         Status result = status();
         result.available = false;
-        result.message = "Could not write compiler to: " + target_path;
+        result.message =
+            QCoreApplication::translate(
+                "CompilerToolchain",
+                "Could not write compiler to: %1")
+                .arg(target_path);
         return result;
     }
 
@@ -115,7 +139,11 @@ CompilerToolchain::Status CompilerToolchain::install_compiler_data(
         QFile::remove(target_path);
         Status result = status();
         result.available = false;
-        result.message = "Could not finish writing compiler to: " + target_path;
+        result.message =
+            QCoreApplication::translate(
+                "CompilerToolchain",
+                "Could not finish writing compiler to: %1")
+                .arg(target_path);
         return result;
     }
 

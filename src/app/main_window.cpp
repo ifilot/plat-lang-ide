@@ -6,6 +6,7 @@
 #include <QDesktopServices>
 #include <QDialog>
 #include <QEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -31,12 +32,16 @@
 #include <QWidget>
 
 #include "about_dialog.h"
+#include "app_language.h"
 #include "bottom_panel.h"
 #include "command_palette_dialog.h"
 #include "code_assistant_panel.h"
 #include "editor_tabs.h"
+#include "file_dialog_locations.h"
 #include "file_explorer_panel.h"
 #include "find_replace_bar.h"
+#include "interpreter_settings.h"
+#include "recent_files.h"
 #include "settings_dialog.h"
 #include "terminal_panel.h"
 #include "title_bar.h"
@@ -44,6 +49,21 @@
 namespace {
 constexpr const char *latest_interpreter_release_url =
     "https://api.github.com/repos/ifilot/plat-lang/releases/latest";
+
+struct BundledExample {
+    const char *title;
+    const char *resource_path;
+    const char *command_id;
+};
+
+constexpr BundledExample bundled_examples[] = {
+    {QT_TRANSLATE_NOOP("MainWindow", "Hello"), ":/examples/hello.plat", "open_example_hello"},
+    {QT_TRANSLATE_NOOP("MainWindow", "Conditions"), ":/examples/conditions.plat", "open_example_conditions"},
+    {QT_TRANSLATE_NOOP("MainWindow", "Fibonacci"), ":/examples/fibonacci.plat", "open_example_fibonacci"},
+    {QT_TRANSLATE_NOOP("MainWindow", "Loops"), ":/examples/loops.plat", "open_example_loops"},
+    {QT_TRANSLATE_NOOP("MainWindow", "Problems"), ":/examples/problems.plat", "open_example_problems"},
+    {QT_TRANSLATE_NOOP("MainWindow", "Tables"), ":/examples/tables.plat", "open_example_tables"},
+};
 
 bool is_semver_tag(const QString &tag)
 {
@@ -62,6 +82,16 @@ bool asset_matches_current_platform(const QString &asset_name)
     return lower_name.contains("linux") && !lower_name.endsWith(".exe");
 #endif
 }
+
+QStringList interpreter_arguments(const QString &file_path,
+                                  const QStringList &extra_arguments = {})
+{
+    QStringList arguments = extra_arguments;
+    arguments.append(InterpreterSettings::arguments_for_preset(
+        InterpreterSettings::load_argument_preset()));
+    arguments.append(file_path);
+    return arguments;
+}
 }
 
 MainWindow::MainWindow(const QString &startup_folder,
@@ -78,6 +108,7 @@ MainWindow::MainWindow(const QString &startup_folder,
       interpreter_version_check_in_progress_(false),
       run_current_file_action_(nullptr),
       stop_process_action_(nullptr),
+      recent_files_menu_(nullptr),
       file_explorer_action_(nullptr),
       terminal_action_(nullptr),
       problems_action_(nullptr),
@@ -89,7 +120,7 @@ MainWindow::MainWindow(const QString &startup_folder,
       pending_run_after_build_(false)
 {
     setWindowFlag(Qt::FramelessWindowHint);
-    setWindowTitle("plat-lang IDE");
+    setWindowTitle(tr("plat-lang IDE"));
     setWindowIcon(QIcon(":/logos/plat-lang-logo.svg"));
     resize(1440, 900);
     CompilerToolchain::Status toolchain_status = compiler_toolchain_.initialize();
@@ -110,7 +141,7 @@ MainWindow::MainWindow(const QString &startup_folder,
 
     auto *run_button = new QPushButton("▶", activity_bar);
     run_button->setObjectName("activityRunButton");
-    run_button->setToolTip("Run current file");
+    run_button->setToolTip(tr("Run current file"));
     run_button->setFixedSize(32, 32);
     run_button->setFocusPolicy(Qt::NoFocus);
     activity_layout->addWidget(run_button);
@@ -146,10 +177,17 @@ MainWindow::MainWindow(const QString &startup_folder,
 
     if (!startup_folder.isEmpty()) {
         file_explorer_->set_root_directory(startup_folder);
+    } else {
+        file_explorer_->set_root_directory(FileDialogLocations::dialog_directory());
     }
 
     connect(file_explorer_, &FileExplorerPanel::file_open_requested,
-            editor_tabs_, &EditorTabs::open_file);
+            this, [this](const QString &path) {
+                if (editor_tabs_->open_file(path)) {
+                    RecentFiles::remember_file(path);
+                    refresh_recent_files_menu();
+                }
+            });
     connect(editor_tabs_, &EditorTabs::current_file_changed,
             this, &MainWindow::update_run_target);
     connect(terminal_panel_, &TerminalPanel::run_requested,
@@ -169,12 +207,13 @@ MainWindow::MainWindow(const QString &startup_folder,
                 pending_run_after_build_ = false;
 
                 if (exit_status == QProcess::NormalExit && exit_code == 0) {
-                    terminal_panel_->show_message("Build succeeded. Running current file.");
+                    terminal_panel_->show_message(
+                        tr("Build succeeded. Running current file."));
                     run_current_file();
                     return;
                 }
 
-                terminal_panel_->show_message("Build failed. Run was skipped.");
+                terminal_panel_->show_message(tr("Build failed. Run was skipped."));
             });
     connect(run_button, &QPushButton::clicked,
             this, &MainWindow::run_current_file);
@@ -191,9 +230,9 @@ MainWindow::MainWindow(const QString &startup_folder,
     update_run_target(editor_tabs_->current_file_path());
     terminal_panel_->show_message(toolchain_status.message);
     bottom_panel_->append_output_message(toolchain_status.message);
-    terminal_panel_->show_message("Toolchain storage: "
+    terminal_panel_->show_message(tr("Toolchain storage: ")
                                   + toolchain_status.storage_root);
-    bottom_panel_->append_output_message("Toolchain storage: "
+    bottom_panel_->append_output_message(tr("Toolchain storage: ")
                                          + toolchain_status.storage_root);
 
     if (!startup_message.isEmpty()) {
@@ -202,9 +241,9 @@ MainWindow::MainWindow(const QString &startup_folder,
     }
 
     if (!startup_folder.isEmpty()) {
-        terminal_panel_->show_message("Explorer root: "
+        terminal_panel_->show_message(tr("Explorer root: ")
                                       + file_explorer_->root_directory());
-        bottom_panel_->append_output_message("Explorer root: "
+        bottom_panel_->append_output_message(tr("Explorer root: ")
                                              + file_explorer_->root_directory());
     }
 
@@ -215,6 +254,13 @@ MainWindow::MainWindow(const QString &startup_folder,
 
 void MainWindow::setup_menu_bar()
 {
+    if (title_bar_ != nullptr) {
+        title_bar_->deleteLater();
+        title_bar_ = nullptr;
+    }
+
+    menuBar()->clear();
+
     auto add_scaffold_action = [](QMenu *menu, const QString &text,
                                   const QKeySequence &shortcut = QKeySequence()) {
         QAction *action = shortcut.isEmpty()
@@ -224,130 +270,141 @@ void MainWindow::setup_menu_bar()
         return action;
     };
 
-    auto *file_menu = menuBar()->addMenu("&File");
-    file_menu->addAction("&New File", QKeySequence::New,
+    auto *file_menu = menuBar()->addMenu(tr("&File"));
+    file_menu->addAction(tr("&New File"), QKeySequence::New,
                          this, &MainWindow::new_file);
-    file_menu->addAction("&Open File...", QKeySequence::Open,
+    file_menu->addAction(tr("&Open File..."), QKeySequence::Open,
                          this, &MainWindow::open_file);
-    file_menu->addAction("Open &Folder...", this, &MainWindow::open_folder);
+    file_menu->addAction(tr("Open &Folder..."), this, &MainWindow::open_folder);
+    recent_files_menu_ = file_menu->addMenu(tr("Open &Recent Files"));
+    refresh_recent_files_menu();
+    auto *examples_menu = file_menu->addMenu(tr("Open E&xample"));
+
+    for (const BundledExample &example : bundled_examples) {
+        examples_menu->addAction(tr(example.title), this, [this, example]() {
+            open_example(example.resource_path,
+                         QString("%1.plat").arg(tr(example.title)).toLower());
+        });
+    }
+
     file_menu->addSeparator();
-    file_menu->addAction("&Save", QKeySequence::Save,
+    file_menu->addAction(tr("&Save"), QKeySequence::Save,
                          this, &MainWindow::save_file);
-    file_menu->addAction("Save &As...", QKeySequence::SaveAs,
+    file_menu->addAction(tr("Save &As..."), QKeySequence::SaveAs,
                          this, &MainWindow::save_file_as);
-    file_menu->addAction("Save A&ll", this, &MainWindow::save_all_files);
+    file_menu->addAction(tr("Save A&ll"), this, &MainWindow::save_all_files);
     file_menu->addSeparator();
-    file_menu->addAction("&Close Editor", QKeySequence::Close,
+    file_menu->addAction(tr("&Close Editor"), QKeySequence::Close,
                          this, &MainWindow::close_editor);
-    file_menu->addAction("E&xit", QKeySequence::Quit,
+    file_menu->addAction(tr("E&xit"), QKeySequence::Quit,
                          qApp, &QApplication::closeAllWindows);
 
-    auto *edit_menu = menuBar()->addMenu("&Edit");
-    edit_menu->addAction("&Undo", QKeySequence::Undo,
+    auto *edit_menu = menuBar()->addMenu(tr("&Edit"));
+    edit_menu->addAction(tr("&Undo"), QKeySequence::Undo,
                          this, &MainWindow::undo);
-    edit_menu->addAction("&Redo", QKeySequence::Redo,
+    edit_menu->addAction(tr("&Redo"), QKeySequence::Redo,
                          this, &MainWindow::redo);
     edit_menu->addSeparator();
-    edit_menu->addAction("Cu&t", QKeySequence::Cut,
+    edit_menu->addAction(tr("Cu&t"), QKeySequence::Cut,
                          this, &MainWindow::cut);
-    edit_menu->addAction("&Copy", QKeySequence::Copy,
+    edit_menu->addAction(tr("&Copy"), QKeySequence::Copy,
                          this, &MainWindow::copy);
-    edit_menu->addAction("&Paste", QKeySequence::Paste,
+    edit_menu->addAction(tr("&Paste"), QKeySequence::Paste,
                          this, &MainWindow::paste);
     edit_menu->addSeparator();
-    edit_menu->addAction("&Find...", QKeySequence::Find,
+    edit_menu->addAction(tr("&Find..."), QKeySequence::Find,
                          this, &MainWindow::show_find);
-    edit_menu->addAction("Find &Next", QKeySequence::FindNext,
+    edit_menu->addAction(tr("Find &Next"), QKeySequence::FindNext,
                          this, &MainWindow::find_next);
-    edit_menu->addAction("Find &Previous", QKeySequence::FindPrevious,
+    edit_menu->addAction(tr("Find &Previous"), QKeySequence::FindPrevious,
                          this, &MainWindow::find_previous);
-    edit_menu->addAction("&Replace...", QKeySequence(Qt::CTRL | Qt::Key_H),
+    edit_menu->addAction(tr("&Replace..."), QKeySequence(Qt::CTRL | Qt::Key_H),
                          this, &MainWindow::show_replace);
 
-    auto *view_menu = menuBar()->addMenu("&View");
-    file_explorer_action_ = view_menu->addAction("File &Explorer",
+    auto *view_menu = menuBar()->addMenu(tr("&View"));
+    file_explorer_action_ = view_menu->addAction(tr("File &Explorer"),
                                                  this,
                                                  &MainWindow::set_file_explorer_visible);
     file_explorer_action_->setCheckable(true);
-    file_explorer_action_->setChecked(true);
+    file_explorer_action_->setChecked(!file_explorer_->isHidden());
 
-    terminal_action_ = view_menu->addAction("&Terminal",
+    terminal_action_ = view_menu->addAction(tr("&Terminal"),
                                             this,
                                             &MainWindow::set_terminal_visible);
     terminal_action_->setCheckable(true);
-    terminal_action_->setChecked(true);
+    terminal_action_->setChecked(bottom_panel_->is_tab_visible(BottomPanel::Tab::Terminal));
 
-    code_assistant_action_ = view_menu->addAction("Code &Assistant",
+    code_assistant_action_ = view_menu->addAction(tr("Code &Assistant"),
                                                   this,
                                                   &MainWindow::set_code_assistant_visible);
     code_assistant_action_->setCheckable(true);
-    code_assistant_action_->setChecked(true);
+    code_assistant_action_->setChecked(!code_assistant_->isHidden());
     view_menu->addSeparator();
-    problems_action_ = view_menu->addAction("&Problems",
+    problems_action_ = view_menu->addAction(tr("&Problems"),
                                             this,
                                             &MainWindow::set_problems_visible);
     problems_action_->setCheckable(true);
-    problems_action_->setChecked(true);
+    problems_action_->setChecked(bottom_panel_->is_tab_visible(BottomPanel::Tab::Problems));
 
-    output_action_ = view_menu->addAction("&Output",
+    output_action_ = view_menu->addAction(tr("&Output"),
                                           this,
                                           &MainWindow::set_output_visible);
     output_action_->setCheckable(true);
-    output_action_->setChecked(true);
+    output_action_->setChecked(bottom_panel_->is_tab_visible(BottomPanel::Tab::Output));
     view_menu->addSeparator();
 
-    auto *theme_menu = view_menu->addMenu("&Theme");
+    auto *theme_menu = view_menu->addMenu(tr("&Theme"));
     auto *theme_group = new QActionGroup(this);
     theme_group->setExclusive(true);
 
-    light_theme_action_ = theme_menu->addAction("&Light", this,
+    light_theme_action_ = theme_menu->addAction(tr("&Light"), this,
                                                 &MainWindow::use_light_theme);
     light_theme_action_->setCheckable(true);
     theme_group->addAction(light_theme_action_);
 
-    dark_theme_action_ = theme_menu->addAction("&Dark", this,
+    dark_theme_action_ = theme_menu->addAction(tr("&Dark"), this,
                                                &MainWindow::use_dark_theme);
     dark_theme_action_->setCheckable(true);
     theme_group->addAction(dark_theme_action_);
     update_theme_actions(ThemeManager::load_theme());
 
-    auto *run_menu = menuBar()->addMenu("&Run");
+    auto *run_menu = menuBar()->addMenu(tr("&Run"));
     run_current_file_action_ = run_menu->addAction(
-        "&Run Current File", QKeySequence(Qt::CTRL | Qt::Key_R),
+        tr("&Run Current File"), QKeySequence(Qt::CTRL | Qt::Key_R),
         this, &MainWindow::run_current_file);
-    stop_process_action_ = run_menu->addAction("&Stop",
+    stop_process_action_ = run_menu->addAction(tr("&Stop"),
                                                QKeySequence(Qt::SHIFT | Qt::Key_F5),
                                                this,
                                                &MainWindow::stop_current_process);
     stop_process_action_->setEnabled(false);
     run_menu->addSeparator();
-    run_menu->addAction("&Build", QKeySequence(Qt::CTRL | Qt::Key_B),
+    run_menu->addAction(tr("&Build"), QKeySequence(Qt::CTRL | Qt::Key_B),
                         this, &MainWindow::build_current_file);
-    run_menu->addAction("Build && Run",
+    run_menu->addAction(tr("Build && Run"),
                         QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R),
                         this, &MainWindow::build_and_run_current_file);
-    run_menu->addAction("Compiler &Status", this,
+    run_menu->addAction(tr("Compiler &Status"), this,
                         &MainWindow::show_compiler_status);
-    run_menu->addAction("Configure &Interpreter...",
+    run_menu->addAction(tr("Configure &Interpreter..."),
                         this, &MainWindow::configure_interpreter);
-    run_menu->addAction("Check for Compiler &Updates...",
+    run_menu->addAction(tr("Check for Compiler &Updates..."),
                         this, &MainWindow::check_compiler_updates);
 
-    auto *tools_menu = menuBar()->addMenu("&Tools");
-    tools_menu->addAction("&Command Palette...",
+    auto *tools_menu = menuBar()->addMenu(tr("&Tools"));
+    tools_menu->addAction(tr("&Command Palette..."),
                           QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P),
                           this, &MainWindow::show_command_palette);
-    tools_menu->addAction("&Format Document",
+    tools_menu->addAction(tr("&Format Document"),
                           QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_I),
                           this, &MainWindow::format_document);
-    tools_menu->addAction("&Settings...",
+    tools_menu->addAction(tr("&Settings..."),
                           QKeySequence(Qt::CTRL | Qt::Key_Comma),
                           this, &MainWindow::show_settings);
 
-    auto *help_menu = menuBar()->addMenu("&Help");
-    help_menu->addAction("&Documentation", QKeySequence::HelpContents,
+    auto *help_menu = menuBar()->addMenu(tr("&Help"));
+    help_menu->addAction(tr("&Documentation"), QKeySequence::HelpContents,
                          this, &MainWindow::open_documentation);
-    help_menu->addAction("&About plat-lang IDE", this,
+    help_menu->addAction(tr("&About plat-lang IDE"), this,
                          &MainWindow::show_about_dialog);
 
     title_bar_ = new TitleBar(menuBar(), this);
@@ -365,12 +422,14 @@ void MainWindow::open_file()
 {
     QString path = QFileDialog::getOpenFileName(
         this,
-        "Open File",
-        file_explorer_->root_directory(),
-        "platlang Files (*.plat);;Text Files (*.txt *.md);;All Files (*)");
+        tr("Open File"),
+        FileDialogLocations::start_path(),
+        tr("platlang Files (*.plat);;Text Files (*.txt *.md);;All Files (*)"));
 
-    if (!path.isEmpty()) {
-        editor_tabs_->open_file(path);
+    if (!path.isEmpty() && editor_tabs_->open_file(path)) {
+        FileDialogLocations::remember_file_path(path);
+        RecentFiles::remember_file(path);
+        refresh_recent_files_menu();
     }
 }
 
@@ -378,8 +437,8 @@ void MainWindow::open_folder()
 {
     QString directory = QFileDialog::getExistingDirectory(
         this,
-        "Open Folder",
-        file_explorer_->root_directory(),
+        tr("Open Folder"),
+        FileDialogLocations::start_path(),
         QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
 
     if (directory.isEmpty()) {
@@ -387,38 +446,82 @@ void MainWindow::open_folder()
     }
 
     if (file_explorer_->set_root_directory(directory)) {
-        terminal_panel_->show_message("Explorer root: " + directory);
-        bottom_panel_->append_output_message("Explorer root: " + directory);
+        FileDialogLocations::remember_directory(directory);
+        terminal_panel_->show_message(tr("Explorer root: ") + directory);
+        bottom_panel_->append_output_message(tr("Explorer root: ") + directory);
     }
+}
+
+void MainWindow::open_recent_file(const QString &path)
+{
+    if (editor_tabs_->open_file(path)) {
+        RecentFiles::remember_file(path);
+        refresh_recent_files_menu();
+        return;
+    }
+
+    RecentFiles::forget_file(path);
+    refresh_recent_files_menu();
+    QMessageBox::warning(this, tr("Unable to open recent file"),
+                         tr("Could not open %1.").arg(path));
+}
+
+void MainWindow::open_example(const QString &resource_path, const QString &title)
+{
+    QFile file(resource_path);
+
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Unable to open example"),
+                             tr("Could not read bundled example %1.").arg(title));
+        return;
+    }
+
+    editor_tabs_->open_text_copy(title, QString::fromUtf8(file.readAll()));
 }
 
 void MainWindow::save_file()
 {
-    editor_tabs_->save_current_file();
+    if (editor_tabs_->save_current_file()) {
+        QString path = editor_tabs_->current_file_path();
+
+        if (!path.isEmpty()) {
+            RecentFiles::remember_file(path);
+            refresh_recent_files_menu();
+        }
+    }
 }
 
 void MainWindow::save_file_as()
 {
-    QString start_path = editor_tabs_->current_file_path();
+    QString file_name = QFileInfo(editor_tabs_->current_file_path()).fileName();
 
-    if (start_path.isEmpty()) {
-        start_path = file_explorer_->root_directory();
+    if (file_name.isEmpty()) {
+        file_name = tr("untitled.plat");
     }
 
     QString path = QFileDialog::getSaveFileName(
         this,
-        "Save File As",
-        start_path,
-        "platlang Files (*.plat);;Text Files (*.txt *.md);;All Files (*)");
+        tr("Save File As"),
+        FileDialogLocations::start_path(file_name),
+        tr("platlang Files (*.plat);;Text Files (*.txt *.md);;All Files (*)"));
 
-    if (!path.isEmpty()) {
-        editor_tabs_->save_current_file_as(path);
+    if (!path.isEmpty() && editor_tabs_->save_current_file_as(path)) {
+        FileDialogLocations::remember_file_path(path);
+        RecentFiles::remember_file(path);
+        refresh_recent_files_menu();
     }
 }
 
 void MainWindow::save_all_files()
 {
-    editor_tabs_->save_all_files();
+    if (editor_tabs_->save_all_files()) {
+        QString path = editor_tabs_->current_file_path();
+
+        if (!path.isEmpty()) {
+            RecentFiles::remember_file(path);
+            refresh_recent_files_menu();
+        }
+    }
 }
 
 void MainWindow::close_editor()
@@ -504,9 +607,9 @@ void MainWindow::replace_all()
         find_replace_bar_->find_text(),
         find_replace_bar_->replace_text());
 
-    terminal_panel_->show_message(QString("Replaced %1 occurrence(s).")
+    terminal_panel_->show_message(tr("Replaced %n occurrence(s).", nullptr, count)
                                   .arg(count));
-    bottom_panel_->append_output_message(QString("Replaced %1 occurrence(s).")
+    bottom_panel_->append_output_message(tr("Replaced %n occurrence(s).", nullptr, count)
                                          .arg(count));
 }
 
@@ -547,12 +650,12 @@ void MainWindow::run_current_file()
 
     if (file_path.isEmpty()) {
         terminal_panel_->show_message(
-            "Save or open a .plat file before running it.");
+            tr("Save or open a .plat file before running it."));
         return;
     }
 
     if (QFileInfo(file_path).suffix() != "plat") {
-        terminal_panel_->show_message("Only .plat files can be run.");
+        terminal_panel_->show_message(tr("Only .plat files can be run."));
         return;
     }
 
@@ -560,12 +663,13 @@ void MainWindow::run_current_file()
 
     if (!toolchain_status.available) {
         terminal_panel_->show_message(toolchain_status.message);
-        terminal_panel_->show_message("Toolchain storage: "
+        terminal_panel_->show_message(tr("Toolchain storage: ")
                                       + toolchain_status.storage_root);
         return;
     }
 
-    terminal_panel_->start_process(toolchain_status.compiler_path, {file_path},
+    terminal_panel_->start_process(toolchain_status.compiler_path,
+                                   interpreter_arguments(file_path),
                                    QFileInfo(file_path).absolutePath());
 }
 
@@ -592,19 +696,20 @@ void MainWindow::start_build_current_file(bool run_after_success)
     if (file_path.isEmpty()) {
         pending_run_after_build_ = false;
         terminal_panel_->show_message(
-            "Save or open a .plat file before building it.");
+            tr("Save or open a .plat file before building it."));
         return;
     }
 
     if (QFileInfo(file_path).suffix() != "plat") {
         pending_run_after_build_ = false;
-        terminal_panel_->show_message("Only .plat files can be built.");
+        terminal_panel_->show_message(tr("Only .plat files can be built."));
         return;
     }
 
     if (!editor_tabs_->save_current_file()) {
         pending_run_after_build_ = false;
-        terminal_panel_->show_message("Build cancelled because the file was not saved.");
+        terminal_panel_->show_message(
+            tr("Build cancelled because the file was not saved."));
         return;
     }
 
@@ -613,15 +718,15 @@ void MainWindow::start_build_current_file(bool run_after_success)
     if (!toolchain_status.available) {
         pending_run_after_build_ = false;
         terminal_panel_->show_message(toolchain_status.message);
-        terminal_panel_->show_message("Toolchain storage: "
+        terminal_panel_->show_message(tr("Toolchain storage: ")
                                       + toolchain_status.storage_root);
         return;
     }
 
-    terminal_panel_->show_message("Building " + QFileInfo(file_path).fileName()
-                                  + " with --ast.");
+    terminal_panel_->show_message(
+        tr("Building %1 with --ast.").arg(QFileInfo(file_path).fileName()));
     terminal_panel_->start_process(toolchain_status.compiler_path,
-                                   {"--ast", file_path},
+                                   interpreter_arguments(file_path, {"--ast"}),
                                    QFileInfo(file_path).absolutePath());
 
     if (!terminal_panel_->is_process_running()) {
@@ -634,15 +739,15 @@ void MainWindow::show_compiler_status()
     CompilerToolchain::Status toolchain_status = compiler_toolchain_.status();
     terminal_panel_->show_message(toolchain_status.message);
     bottom_panel_->append_output_message(toolchain_status.message);
-    terminal_panel_->show_message("Toolchain storage: "
+    terminal_panel_->show_message(tr("Toolchain storage: ")
                                   + toolchain_status.storage_root);
-    bottom_panel_->append_output_message("Toolchain storage: "
+    bottom_panel_->append_output_message(tr("Toolchain storage: ")
                                          + toolchain_status.storage_root);
 
     if (!toolchain_status.compiler_path.isEmpty()) {
-        terminal_panel_->show_message("Compiler path: "
+        terminal_panel_->show_message(tr("Compiler path: ")
                                       + toolchain_status.compiler_path);
-        bottom_panel_->append_output_message("Compiler path: "
+        bottom_panel_->append_output_message(tr("Compiler path: ")
                                              + toolchain_status.compiler_path);
     }
 }
@@ -651,12 +756,12 @@ void MainWindow::configure_interpreter()
 {
     QString path = QFileDialog::getOpenFileName(
         this,
-        "Select platlang compiler",
-        file_explorer_->root_directory(),
+        tr("Select platlang compiler"),
+        FileDialogLocations::start_path(),
 #ifdef Q_OS_WIN
-        "Executables (*.exe);;All Files (*)"
+        tr("Executables (*.exe);;All Files (*)")
 #else
-        "Executables (*)"
+        tr("Executables (*)")
 #endif
     );
 
@@ -664,10 +769,11 @@ void MainWindow::configure_interpreter()
         return;
     }
 
+    FileDialogLocations::remember_file_path(path);
     CompilerToolchain::Status toolchain_status =
         compiler_toolchain_.install_compiler(path);
     terminal_panel_->show_message(toolchain_status.message);
-    terminal_panel_->show_message("Toolchain storage: "
+    terminal_panel_->show_message(tr("Toolchain storage: ")
                                   + toolchain_status.storage_root);
     bottom_panel_->append_output_message(toolchain_status.message);
 }
@@ -675,9 +781,11 @@ void MainWindow::configure_interpreter()
 void MainWindow::check_compiler_updates()
 {
     CompilerToolchain::Status toolchain_status = compiler_toolchain_.initialize();
-    terminal_panel_->show_message("Checked local development compiler for updates.");
+    terminal_panel_->show_message(
+        tr("Checked local development compiler for updates."));
     terminal_panel_->show_message(toolchain_status.message);
-    bottom_panel_->append_output_message("Checked local development compiler for updates.");
+    bottom_panel_->append_output_message(
+        tr("Checked local development compiler for updates."));
     bottom_panel_->append_output_message(toolchain_status.message);
     check_latest_interpreter_version(true);
 }
@@ -691,7 +799,7 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
 
     if (interpreter_version_check_in_progress_) {
         if (user_initiated) {
-            report("Interpreter release check is already running.");
+            report(tr("Interpreter release check is already running."));
         }
 
         return;
@@ -700,7 +808,7 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
     interpreter_version_check_in_progress_ = true;
 
     if (user_initiated) {
-        report("Checking latest platlang interpreter release.");
+        report(tr("Checking latest platlang interpreter release."));
     }
 
     QNetworkRequest request{QUrl(latest_interpreter_release_url)};
@@ -714,7 +822,7 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
         interpreter_version_check_in_progress_ = false;
 
         if (reply->error() != QNetworkReply::NoError) {
-            report("Could not check latest platlang interpreter release: "
+            report(tr("Could not check latest platlang interpreter release: ")
                    + reply->errorString());
             return;
         }
@@ -725,7 +833,7 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
 
         if (parse_error.error != QJsonParseError::NoError
             || !document.isObject()) {
-            report("Could not read latest platlang interpreter release.");
+            report(tr("Could not read latest platlang interpreter release."));
             return;
         }
 
@@ -733,7 +841,7 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
         QString tag = release.value("tag_name").toString();
 
         if (!is_semver_tag(tag)) {
-            report("Latest platlang interpreter release does not use a semver tag.");
+            report(tr("Latest platlang interpreter release does not use a semver tag."));
             return;
         }
 
@@ -755,48 +863,49 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
         CompilerToolchain::Status toolchain_status = compiler_toolchain_.status();
 
         if (toolchain_status.available && toolchain_status.active_version == tag) {
-            report("platlang interpreter is up to date (" + tag + ").");
+            report(tr("platlang interpreter is up to date (%1).").arg(tag));
             return;
         }
 
         QString current_version = toolchain_status.active_version.isEmpty()
-                                      ? "none"
+                                      ? tr("none")
                                       : toolchain_status.active_version;
-        QString prompt_text = "Latest platlang interpreter: " + tag
-                              + "\nInstalled interpreter: " + current_version
-                              + "\n\nDownload and install the latest interpreter?";
+        QString prompt_text = tr("Latest platlang interpreter: %1\n"
+                                 "Installed interpreter: %2\n\n"
+                                 "Download and install the latest interpreter?")
+                                  .arg(tag, current_version);
 
         QMessageBox prompt(this);
-        prompt.setWindowTitle("Download platlang Interpreter");
+        prompt.setWindowTitle(tr("Download platlang Interpreter"));
         prompt.setText(prompt_text);
         prompt.setIcon(QMessageBox::Information);
         QPushButton *download_button =
-            prompt.addButton("Download", QMessageBox::AcceptRole);
+            prompt.addButton(tr("Download"), QMessageBox::AcceptRole);
         QPushButton *release_button =
-            prompt.addButton("Open Release", QMessageBox::ActionRole);
-        prompt.addButton("Later", QMessageBox::RejectRole);
+            prompt.addButton(tr("Open Release"), QMessageBox::ActionRole);
+        prompt.addButton(tr("Later"), QMessageBox::RejectRole);
         prompt.setDefaultButton(download_button);
         prompt.exec();
 
         if (prompt.clickedButton() == release_button) {
             QDesktopServices::openUrl(QUrl(release_url));
-            report("Opened platlang interpreter release " + tag + ".");
+            report(tr("Opened platlang interpreter release %1.").arg(tag));
             return;
         }
 
         if (prompt.clickedButton() != download_button) {
-            report("Skipped platlang interpreter download for " + tag + ".");
+            report(tr("Skipped platlang interpreter download for %1.").arg(tag));
             return;
         }
 
         if (download_url.isEmpty()) {
-            report("No platlang interpreter asset is available for this platform in "
-                   + tag + ".");
+            report(tr("No platlang interpreter asset is available for this platform in %1.")
+                   .arg(tag));
             QDesktopServices::openUrl(QUrl(release_url));
             return;
         }
 
-        report("Downloading platlang interpreter " + tag + ".");
+        report(tr("Downloading platlang interpreter %1.").arg(tag));
 
         QNetworkRequest download_request{QUrl(download_url)};
         download_request.setRawHeader("Accept", "application/octet-stream");
@@ -810,8 +919,8 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
                     download_reply->deleteLater();
 
                     if (download_reply->error() != QNetworkReply::NoError) {
-                        report("Could not download platlang interpreter "
-                               + tag + ": "
+                        report(tr("Could not download platlang interpreter %1: ")
+                                   .arg(tag)
                                + download_reply->errorString());
                         return;
                     }
@@ -823,7 +932,8 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
 
                     if (installed_status.available
                         && installed_status.active_version == tag) {
-                        report("Installed latest platlang interpreter " + tag + ".");
+                        report(tr("Installed latest platlang interpreter %1.")
+                                   .arg(tag));
                     }
                 });
     });
@@ -841,10 +951,10 @@ void MainWindow::show_command_palette()
 void MainWindow::format_document()
 {
     if (editor_tabs_->format_current_document()) {
-        terminal_panel_->show_message("Formatted current document.");
-        bottom_panel_->append_output_message("Formatted current document.");
+        terminal_panel_->show_message(tr("Formatted current document."));
+        bottom_panel_->append_output_message(tr("Formatted current document."));
     } else {
-        terminal_panel_->show_message("No open document to format.");
+        terminal_panel_->show_message(tr("No open document to format."));
     }
 }
 
@@ -859,6 +969,10 @@ void MainWindow::show_settings()
     }
 
     ThemeManager::Theme selected_theme = dialog.selected_theme();
+    InterpreterSettings::save_argument_preset(
+        dialog.selected_interpreter_argument_preset());
+    AppLanguage::save_language(dialog.selected_language());
+    AppLanguage::install_translator(*qApp);
 
     if (selected_theme == ThemeManager::Theme::Dark) {
         use_dark_theme();
@@ -905,6 +1019,30 @@ void MainWindow::update_theme_actions(ThemeManager::Theme theme)
     }
 }
 
+void MainWindow::refresh_recent_files_menu()
+{
+    if (recent_files_menu_ == nullptr) {
+        return;
+    }
+
+    recent_files_menu_->clear();
+    QStringList recent_files = RecentFiles::files();
+
+    if (recent_files.isEmpty()) {
+        QAction *empty_action = recent_files_menu_->addAction(tr("No Recent Files"));
+        empty_action->setEnabled(false);
+        return;
+    }
+
+    for (const QString &path : recent_files) {
+        QAction *action = recent_files_menu_->addAction(QFileInfo(path).fileName());
+        action->setToolTip(path);
+        connect(action, &QAction::triggered, this, [this, path]() {
+            open_recent_file(path);
+        });
+    }
+}
+
 void MainWindow::execute_command(const QString &command_id)
 {
     if (command_id == "new_file") {
@@ -913,6 +1051,14 @@ void MainWindow::execute_command(const QString &command_id)
         open_file();
     } else if (command_id == "open_folder") {
         open_folder();
+    } else if (command_id.startsWith("open_example_")) {
+        for (const BundledExample &example : bundled_examples) {
+            if (command_id == example.command_id) {
+                open_example(example.resource_path,
+                             QString("%1.plat").arg(tr(example.title)).toLower());
+                return;
+            }
+        }
     } else if (command_id == "save_file") {
         save_file();
     } else if (command_id == "run_current_file") {
@@ -945,6 +1091,13 @@ void MainWindow::execute_command(const QString &command_id)
 void MainWindow::changeEvent(QEvent *event)
 {
     QMainWindow::changeEvent(event);
+
+    if (event->type() == QEvent::LanguageChange) {
+        setWindowTitle(tr("plat-lang IDE"));
+        setup_menu_bar();
+        update_run_target(editor_tabs_->current_file_path());
+        return;
+    }
 
     if (event->type() == QEvent::WindowStateChange && title_bar_ != nullptr) {
         title_bar_->refresh_window_state();

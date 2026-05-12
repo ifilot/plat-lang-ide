@@ -5,6 +5,7 @@
 #include <QWidget>
 
 class QFileSystemModel;
+class QLabel;
 class QModelIndex;
 class QTreeView;
 
@@ -55,6 +56,7 @@ private slots:
 
 private:
     QFileSystemModel *model_;
+    QLabel *root_label_;
     QTreeView *tree_view_;
 };
 

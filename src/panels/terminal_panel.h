@@ -5,6 +5,7 @@
 #include <QWidget>
 
 class QColor;
+class QEvent;
 class QLineEdit;
 class QLabel;
 class QPushButton;
@@ -123,12 +124,17 @@ private:
      */
     QColor terminal_text_color(TerminalTextKind kind) const;
 
+    void changeEvent(QEvent *event) override;
+    void retranslate_ui();
+
     QProcess *process_;
     QTextEdit *output_;
     QLineEdit *input_;
     QLabel *run_target_label_;
     QPushButton *run_button_;
     QPushButton *send_button_;
+    QString current_run_target_path_;
+    bool current_run_target_can_run_;
 };
 
 #endif

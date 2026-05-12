@@ -1,6 +1,7 @@
 #include "terminal_panel.h"
 
 #include <QColor>
+#include <QEvent>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -16,15 +17,16 @@ TerminalPanel::TerminalPanel(QWidget *parent)
       process_(new QProcess(this)),
       output_(new QTextEdit(this)),
       input_(new QLineEdit(this)),
-      run_target_label_(new QLabel("No runnable .plat file open.", this)),
-      run_button_(new QPushButton("Run", this)),
-      send_button_(new QPushButton("Send", this))
+      run_target_label_(new QLabel(this)),
+      run_button_(new QPushButton(this)),
+      send_button_(new QPushButton(this)),
+      current_run_target_can_run_(false)
 {
     output_->setReadOnly(true);
     output_->setLineWrapMode(QTextEdit::NoWrap);
-    input_->setPlaceholderText("Input for the running program...");
+    retranslate_ui();
     run_button_->setEnabled(false);
-    append_terminal_text("Compiler-interpreter terminal ready.",
+    append_terminal_text(tr("Compiler-interpreter terminal ready."),
                          TerminalTextKind::MutedInfo);
 
     process_->setProcessChannelMode(QProcess::MergedChannels);
@@ -75,7 +77,7 @@ void TerminalPanel::start_process(const QString &program,
     process_->start(program, arguments);
 
     if (!process_->waitForStarted(3000)) {
-        append_terminal_text("Failed to start compiler-interpreter: "
+        append_terminal_text(tr("Failed to start compiler-interpreter: ")
                              + process_->errorString(),
                              TerminalTextKind::MutedInfo);
         emit process_running_changed(false);
@@ -87,17 +89,20 @@ void TerminalPanel::start_process(const QString &program,
 
 void TerminalPanel::set_run_target(const QString &path, bool can_run)
 {
+    current_run_target_path_ = path;
+    current_run_target_can_run_ = can_run;
+
     if (path.isEmpty()) {
         run_button_->setEnabled(false);
-        run_target_label_->setText("No runnable .plat file open.");
+        run_target_label_->setText(tr("No runnable .plat file open."));
         run_target_label_->setToolTip({});
         return;
     }
 
     QFileInfo file_info(path);
     run_button_->setEnabled(can_run);
-    run_target_label_->setText(can_run ? "Run target: " + file_info.fileName()
-                                       : "Open a .plat file to run.");
+    run_target_label_->setText(can_run ? tr("Run target: %1").arg(file_info.fileName())
+                                       : tr("Open a .plat file to run."));
     run_target_label_->setToolTip(path);
 }
 
@@ -109,12 +114,12 @@ void TerminalPanel::show_message(const QString &text)
 void TerminalPanel::stop_process()
 {
     if (process_->state() == QProcess::NotRunning) {
-        append_terminal_text("No compiler-interpreter process is running.",
+        append_terminal_text(tr("No compiler-interpreter process is running."),
                              TerminalTextKind::MutedInfo);
         return;
     }
 
-    append_terminal_text("Stopping compiler-interpreter process.",
+    append_terminal_text(tr("Stopping compiler-interpreter process."),
                          TerminalTextKind::MutedInfo);
     process_->terminate();
 
@@ -143,7 +148,7 @@ void TerminalPanel::send_input()
         process_->write(text.toUtf8());
         process_->write("\n");
     } else {
-        append_terminal_text("No compiler-interpreter process is running.",
+        append_terminal_text(tr("No compiler-interpreter process is running."),
                              TerminalTextKind::MutedInfo);
     }
 }
@@ -157,13 +162,30 @@ void TerminalPanel::read_process_output()
 void TerminalPanel::handle_process_finished(int exit_code,
                                             QProcess::ExitStatus exit_status)
 {
-    QString status = exit_status == QProcess::NormalExit ? "exited" : "crashed";
-    append_terminal_text(QString("Process %1 with code %2.")
+    QString status = exit_status == QProcess::NormalExit ? tr("exited") : tr("crashed");
+    append_terminal_text(tr("Process %1 with code %2.")
                          .arg(status)
                          .arg(exit_code),
                          TerminalTextKind::MutedInfo);
     emit process_finished(exit_code, exit_status);
     emit process_running_changed(false);
+}
+
+void TerminalPanel::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+
+    if (event->type() == QEvent::LanguageChange) {
+        retranslate_ui();
+    }
+}
+
+void TerminalPanel::retranslate_ui()
+{
+    input_->setPlaceholderText(tr("Input for the running program..."));
+    run_button_->setText(tr("Run"));
+    send_button_->setText(tr("Send"));
+    set_run_target(current_run_target_path_, current_run_target_can_run_);
 }
 
 void TerminalPanel::append_terminal_text(const QString &text,

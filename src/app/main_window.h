@@ -13,6 +13,7 @@ class CodeAssistantPanel;
 class EditorTabs;
 class FileExplorerPanel;
 class FindReplaceBar;
+class QMenu;
 class QNetworkAccessManager;
 class TerminalPanel;
 class TitleBar;
@@ -56,6 +57,21 @@ private slots:
      * Selects a new root folder for the file explorer.
      */
     void open_folder();
+
+    /**
+     * Opens a recent file path from settings.
+     *
+     * @param path File path to reopen.
+     */
+    void open_recent_file(const QString &path);
+
+    /**
+     * Opens a bundled example as an unsaved editor document.
+     *
+     * @param resource_path Qt resource path for the example.
+     * @param title Editor tab title.
+     */
+    void open_example(const QString &resource_path, const QString &title);
 
     /**
      * Saves the current editor.
@@ -243,6 +259,11 @@ private:
     void update_theme_actions(ThemeManager::Theme theme);
 
     /**
+     * Rebuilds the recent files menu from settings.
+     */
+    void refresh_recent_files_menu();
+
+    /**
      * Starts a parse-only build for the active file.
      *
      * @param run_after_success Whether to run after a successful build.
@@ -283,6 +304,7 @@ private:
     bool interpreter_version_check_in_progress_;
     QAction *run_current_file_action_;
     QAction *stop_process_action_;
+    QMenu *recent_files_menu_;
     QAction *file_explorer_action_;
     QAction *terminal_action_;
     QAction *problems_action_;

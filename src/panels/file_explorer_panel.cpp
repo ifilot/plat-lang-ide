@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QFileSystemModel>
 #include <QHeaderView>
+#include <QLabel>
 #include <QModelIndex>
 #include <QTreeView>
 #include <QVBoxLayout>
@@ -14,9 +15,16 @@
 FileExplorerPanel::FileExplorerPanel(QWidget *parent)
     : QWidget(parent),
       model_(new QFileSystemModel(this)),
+      root_label_(new QLabel(this)),
       tree_view_(new QTreeView(this))
 {
     model_->setIconProvider(new FileIconProvider());
+
+    QFont root_font = root_label_->font();
+    root_font.setBold(true);
+    root_label_->setFont(root_font);
+    root_label_->setContentsMargins(8, 6, 8, 4);
+    root_label_->setTextInteractionFlags(Qt::TextSelectableByMouse);
 
     tree_view_->setModel(model_);
     tree_view_->setFont(AppFonts::code_font(10));
@@ -26,6 +34,7 @@ FileExplorerPanel::FileExplorerPanel(QWidget *parent)
     tree_view_->setIndentation(16);
     tree_view_->setSortingEnabled(true);
     tree_view_->sortByColumn(0, Qt::AscendingOrder);
+    tree_view_->header()->hide();
     tree_view_->header()->setStretchLastSection(false);
     tree_view_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     tree_view_->hideColumn(1);
@@ -37,6 +46,8 @@ FileExplorerPanel::FileExplorerPanel(QWidget *parent)
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addWidget(root_label_);
     layout->addWidget(tree_view_);
 }
 
@@ -50,6 +61,18 @@ bool FileExplorerPanel::set_root_directory(const QString &path)
 
     QString root_path = file_info.absoluteFilePath();
     QModelIndex root_index = model_->setRootPath(root_path);
+    QString root_name = file_info.fileName();
+
+    if (root_name.isEmpty()) {
+        root_name = QDir(root_path).dirName();
+    }
+
+    if (root_name.isEmpty()) {
+        root_name = root_path;
+    }
+
+    root_label_->setText(root_name);
+    root_label_->setToolTip(root_path);
 
     if (tree_view_->model() == model_) {
         tree_view_->setRootIndex(root_index);

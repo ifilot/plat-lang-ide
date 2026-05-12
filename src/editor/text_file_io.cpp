@@ -1,5 +1,6 @@
 #include "text_file_io.h"
 
+#include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>
 
@@ -11,7 +12,9 @@ std::optional<QString> read_utf8_file(const QString &path, QString *error)
 
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         if (error != nullptr) {
-            *error = "Could not open " + path + ".";
+            *error = QCoreApplication::translate(
+                         "TextFileIo", "Could not open %1.")
+                         .arg(path);
         }
 
         return std::nullopt;
@@ -27,7 +30,9 @@ bool write_utf8_file(const QString &path, const QString &contents,
 
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
         if (error != nullptr) {
-            *error = "Could not save " + path + ".";
+            *error = QCoreApplication::translate(
+                         "TextFileIo", "Could not save %1.")
+                         .arg(path);
         }
 
         return false;
