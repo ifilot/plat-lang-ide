@@ -16,6 +16,7 @@ SettingsDialog::SettingsDialog(
     : QDialog(parent),
       theme_combo_(new QComboBox(this)),
       language_combo_(new QComboBox(this)),
+      compiler_update_channel_combo_(new QComboBox(this)),
       interpreter_arguments_combo_(new QComboBox(this))
 {
     setWindowTitle(tr("Settings"));
@@ -36,6 +37,24 @@ SettingsDialog::SettingsDialog(
         language_combo_->setCurrentIndex(selected_language_index);
     }
 
+    compiler_update_channel_combo_->addItem(
+        tr("Stable releases"),
+        QVariant::fromValue(
+            static_cast<int>(CompilerToolchain::UpdateChannel::StableRelease)));
+    compiler_update_channel_combo_->addItem(
+        tr("Develop branch (experimental)"),
+        QVariant::fromValue(
+            static_cast<int>(CompilerToolchain::UpdateChannel::DevelopBranch)));
+
+    int selected_update_channel_index =
+        compiler_update_channel_combo_->findData(
+            static_cast<int>(CompilerToolchain::load_update_channel()));
+
+    if (selected_update_channel_index >= 0) {
+        compiler_update_channel_combo_->setCurrentIndex(
+            selected_update_channel_index);
+    }
+
     interpreter_arguments_combo_->addItem(
         tr("No command-line arguments"),
         QVariant::fromValue(static_cast<int>(InterpreterSettings::ArgumentPreset::None)));
@@ -53,6 +72,7 @@ SettingsDialog::SettingsDialog(
     auto *form = new QFormLayout();
     form->addRow(tr("Theme"), theme_combo_);
     form->addRow(tr("Language"), language_combo_);
+    form->addRow(tr("Compiler update channel"), compiler_update_channel_combo_);
     form->addRow(tr("Interpreter arguments"), interpreter_arguments_combo_);
     form->addRow(tr("Compiler status"), new QLabel(toolchain_status.message, this));
     form->addRow(tr("Toolchain storage"), new QLabel(toolchain_status.storage_root, this));
@@ -87,6 +107,13 @@ SettingsDialog::selected_interpreter_argument_preset() const
 {
     return static_cast<InterpreterSettings::ArgumentPreset>(
         interpreter_arguments_combo_->currentData().toInt());
+}
+
+CompilerToolchain::UpdateChannel
+SettingsDialog::selected_compiler_update_channel() const
+{
+    return static_cast<CompilerToolchain::UpdateChannel>(
+        compiler_update_channel_combo_->currentData().toInt());
 }
 
 QString SettingsDialog::selected_language() const

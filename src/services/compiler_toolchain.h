@@ -10,6 +10,14 @@
 class CompilerToolchain {
 public:
     /**
+     * Selects where automatic interpreter updates are fetched from.
+     */
+    enum class UpdateChannel {
+        StableRelease,
+        DevelopBranch
+    };
+
+    /**
      * Describes the current toolchain resolution result.
      */
     struct Status {
@@ -17,6 +25,7 @@ public:
         QString active_version;
         QString storage_root;
         QString message;
+        UpdateChannel update_channel;
         bool available;
     };
 
@@ -59,6 +68,28 @@ public:
      */
     Status install_compiler_data(const QByteArray &compiler_data,
                                  const QString &version);
+
+    /**
+     * Loads the selected update channel.
+     *
+     * @return Saved update channel.
+     */
+    static UpdateChannel load_update_channel();
+
+    /**
+     * Saves the selected update channel.
+     *
+     * @param channel Update channel to use.
+     */
+    static void save_update_channel(UpdateChannel channel);
+
+    /**
+     * Returns the stored version id for a develop branch commit.
+     *
+     * @param sha Full Git commit SHA.
+     * @return Develop version id.
+     */
+    static QString develop_version(const QString &sha);
 
 private:
     /**

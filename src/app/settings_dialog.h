@@ -42,6 +42,13 @@ public:
     InterpreterSettings::ArgumentPreset selected_interpreter_argument_preset() const;
 
     /**
+     * Returns the selected compiler update channel.
+     *
+     * @return Selected compiler update channel.
+     */
+    CompilerToolchain::UpdateChannel selected_compiler_update_channel() const;
+
+    /**
      * Returns the selected UI language code.
      *
      * @return Selected language code.
@@ -51,6 +58,7 @@ public:
 private:
     QComboBox *theme_combo_;
     QComboBox *language_combo_;
+    QComboBox *compiler_update_channel_combo_;
     QComboBox *interpreter_arguments_combo_;
 };
 

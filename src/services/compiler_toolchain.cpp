@@ -9,6 +9,9 @@
 
 namespace {
 constexpr const char *dev_version = "dev";
+constexpr const char *develop_version_prefix = "develop-";
+constexpr const char *update_channel_setting_key =
+    "toolchains/platlang/update_channel";
 
 QString translate_toolchain(const char *text)
 {
@@ -41,6 +44,7 @@ CompilerToolchain::Status CompilerToolchain::status() const
     Status result;
     result.storage_root = toolchain_root();
     result.active_version = active_version();
+    result.update_channel = load_update_channel();
 
     if (result.active_version.isEmpty()) {
         result.available = false;
@@ -103,6 +107,32 @@ CompilerToolchain::Status CompilerToolchain::install_compiler(
     make_executable(target_path);
     set_active_version(version);
     return status();
+}
+
+CompilerToolchain::UpdateChannel CompilerToolchain::load_update_channel()
+{
+    QSettings settings;
+    QString value = settings.value(update_channel_setting_key, "stable").toString();
+
+    if (value == "develop") {
+        return UpdateChannel::DevelopBranch;
+    }
+
+    return UpdateChannel::StableRelease;
+}
+
+void CompilerToolchain::save_update_channel(UpdateChannel channel)
+{
+    QSettings settings;
+    settings.setValue(update_channel_setting_key,
+                      channel == UpdateChannel::DevelopBranch
+                          ? "develop"
+                          : "stable");
+}
+
+QString CompilerToolchain::develop_version(const QString &sha)
+{
+    return QString(develop_version_prefix) + sha;
 }
 
 CompilerToolchain::Status CompilerToolchain::install_compiler_data(
@@ -170,6 +200,11 @@ QString CompilerToolchain::toolchain_root() const
 
 QString CompilerToolchain::version_directory(const QString &version) const
 {
+    if (version.startsWith(develop_version_prefix)) {
+        return QDir(toolchain_root())
+            .filePath("develop/" + version.mid(QString(develop_version_prefix).size()));
+    }
+
     return QDir(toolchain_root()).filePath("versions/" + version);
 }
 
