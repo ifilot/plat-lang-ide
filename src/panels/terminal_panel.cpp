@@ -1,6 +1,7 @@
 #include "terminal_panel.h"
 
 #include <QColor>
+#include <QDir>
 #include <QEvent>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -74,6 +75,39 @@ void TerminalPanel::start_process(const QString &program,
     }
     append_terminal_text("> " + program + " " + arguments.join(' '),
                          TerminalTextKind::MutedInfo);
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    const QString compiler_directory = QFileInfo(program).absolutePath();
+
+    if (!compiler_directory.isEmpty()) {
+#ifdef Q_OS_WIN
+        const QString library_path_name = QStringLiteral("PATH");
+#elif defined(Q_OS_MACOS)
+        const QString library_path_name = QStringLiteral("DYLD_LIBRARY_PATH");
+#else
+        const QString library_path_name = QStringLiteral("LD_LIBRARY_PATH");
+#endif
+        const QString existing_library_path =
+            environment.value(library_path_name);
+        QStringList library_paths;
+        library_paths.append(compiler_directory);
+
+        const QString package_library_directory =
+            QDir(compiler_directory).absoluteFilePath("../lib");
+
+        if (QFileInfo(package_library_directory).isDir()) {
+            library_paths.append(QDir(package_library_directory).absolutePath());
+        }
+
+        if (!existing_library_path.isEmpty()) {
+            library_paths.append(existing_library_path);
+        }
+
+        environment.insert(
+            library_path_name,
+            library_paths.join(QDir::listSeparator()));
+        process_->setProcessEnvironment(environment);
+    }
+
     process_->start(program, arguments);
 
     if (!process_->waitForStarted(3000)) {

@@ -5,6 +5,8 @@
 #include <QApplication>
 #include <QDesktopServices>
 #include <QDialog>
+#include <QDir>
+#include <QDirIterator>
 #include <QEvent>
 #include <QFile>
 #include <QFileDialog>
@@ -83,6 +85,72 @@ bool asset_matches_current_platform(const QString &asset_name)
 #else
     return lower_name.contains("linux") && !lower_name.endsWith(".exe");
 #endif
+}
+
+bool asset_is_package(const QString &asset_name)
+{
+    const QString lower_name = asset_name.toLower();
+    return lower_name.endsWith(".tar")
+           || lower_name.endsWith(".tar.gz")
+           || lower_name.endsWith(".tgz")
+           || lower_name.endsWith(".zip");
+}
+
+int asset_priority_for_current_platform(const QString &asset_name)
+{
+    if (!asset_matches_current_platform(asset_name)) {
+        return 0;
+    }
+
+    return asset_is_package(asset_name) ? 2 : 1;
+}
+
+QString asset_identity(const QJsonObject &asset)
+{
+    QString digest = asset.value("digest").toString();
+
+    if (!digest.isEmpty()) {
+        return digest;
+    }
+
+    QString updated_at = asset.value("updated_at").toString();
+
+    if (!updated_at.isEmpty()) {
+        return updated_at;
+    }
+
+    return QString::number(static_cast<qint64>(asset.value("id").toDouble()));
+}
+
+QString package_root_for_compiler_path(const QString &compiler_path)
+{
+    QFileInfo compiler_info(compiler_path);
+    QDir compiler_directory = compiler_info.absoluteDir();
+
+    if (compiler_directory.dirName() == QStringLiteral("bin")) {
+        compiler_directory.cdUp();
+    }
+
+    return compiler_directory.absolutePath();
+}
+
+bool installed_package_has_runtime_files(const QString &compiler_path)
+{
+    const QString package_root = package_root_for_compiler_path(compiler_path);
+    const QString absolute_compiler_path =
+        QFileInfo(compiler_path).absoluteFilePath();
+    QDirIterator iterator(package_root, QDir::Files,
+                          QDirIterator::Subdirectories);
+
+    while (iterator.hasNext()) {
+        const QString path = iterator.next();
+
+        if (QFileInfo(path).absoluteFilePath() != absolute_compiler_path) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 QStringList interpreter_arguments(const QString &file_path,
@@ -863,29 +931,24 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
                         return;
                     }
 
-                    QString version = CompilerToolchain::develop_version(sha);
-                    CompilerToolchain::Status toolchain_status =
-                        compiler_toolchain_.status();
-
-                    if (toolchain_status.available
-                        && toolchain_status.active_version == version) {
-                        interpreter_version_check_in_progress_ = false;
-                        report(tr("platlang develop interpreter is up to date (%1).")
-                                   .arg(sha.left(12)));
-                        return;
-                    }
-
                     QString download_url;
+                    QString download_asset_name;
+                    QString download_asset_identity;
+                    int download_asset_priority = 0;
                     const QJsonArray assets = release.value("assets").toArray();
 
                     for (const QJsonValue &asset_value : assets) {
                         QJsonObject asset = asset_value.toObject();
                         QString asset_name = asset.value("name").toString();
+                        int asset_priority =
+                            asset_priority_for_current_platform(asset_name);
 
-                        if (asset_matches_current_platform(asset_name)) {
+                        if (asset_priority > download_asset_priority) {
                             download_url =
                                 asset.value("browser_download_url").toString();
-                            break;
+                            download_asset_name = asset_name;
+                            download_asset_identity = asset_identity(asset);
+                            download_asset_priority = asset_priority;
                         }
                     }
 
@@ -894,6 +957,25 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
                         report(tr("No platlang develop prerelease asset is available for this platform in %1.")
                                .arg(sha.left(12)));
                         QDesktopServices::openUrl(QUrl(release_url));
+                        return;
+                    }
+
+                    QString version = CompilerToolchain::develop_version(
+                        sha, download_asset_identity);
+                    CompilerToolchain::Status toolchain_status =
+                        compiler_toolchain_.status();
+
+                    bool package_runtime_available =
+                        !asset_is_package(download_asset_name)
+                        || installed_package_has_runtime_files(
+                            toolchain_status.compiler_path);
+
+                    if (toolchain_status.available
+                        && toolchain_status.active_version == version
+                        && package_runtime_available) {
+                        interpreter_version_check_in_progress_ = false;
+                        report(tr("platlang develop interpreter is up to date (%1).")
+                                   .arg(sha.left(12)));
                         return;
                     }
 
@@ -949,7 +1031,8 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
 
                     connect(download_reply, &QNetworkReply::finished,
                             this,
-                            [this, download_reply, report, sha, version]() {
+                            [this, download_reply, report, sha, version,
+                             download_asset_name]() {
                                 download_reply->deleteLater();
                                 interpreter_version_check_in_progress_ = false;
 
@@ -963,7 +1046,8 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
 
                                 CompilerToolchain::Status installed_status =
                                     compiler_toolchain_.install_compiler_data(
-                                        download_reply->readAll(), version);
+                                        download_reply->readAll(), version,
+                                        download_asset_name);
                                 report(installed_status.message);
 
                                 if (installed_status.available
@@ -1013,21 +1097,31 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
         QString release_url = release.value("html_url").toString(
             "https://github.com/ifilot/plat-lang/releases");
         QString download_url;
+        QString download_asset_name;
+        int download_asset_priority = 0;
         const QJsonArray assets = release.value("assets").toArray();
 
         for (const QJsonValue &asset_value : assets) {
             QJsonObject asset = asset_value.toObject();
             QString asset_name = asset.value("name").toString();
+            int asset_priority = asset_priority_for_current_platform(asset_name);
 
-            if (asset_matches_current_platform(asset_name)) {
+            if (asset_priority > download_asset_priority) {
                 download_url = asset.value("browser_download_url").toString();
-                break;
+                download_asset_name = asset_name;
+                download_asset_priority = asset_priority;
             }
         }
 
         CompilerToolchain::Status toolchain_status = compiler_toolchain_.status();
 
-        if (toolchain_status.available && toolchain_status.active_version == tag) {
+        bool package_runtime_available =
+            !asset_is_package(download_asset_name)
+            || installed_package_has_runtime_files(toolchain_status.compiler_path);
+
+        if (toolchain_status.available
+            && toolchain_status.active_version == tag
+            && package_runtime_available) {
             report(tr("platlang interpreter is up to date (%1).").arg(tag));
             return;
         }
@@ -1080,7 +1174,7 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
             interpreter_version_network_->get(download_request);
 
         connect(download_reply, &QNetworkReply::finished, this,
-                [this, download_reply, tag, report]() {
+                [this, download_reply, tag, report, download_asset_name]() {
                     download_reply->deleteLater();
 
                     if (download_reply->error() != QNetworkReply::NoError) {
@@ -1092,7 +1186,8 @@ void MainWindow::check_latest_interpreter_version(bool user_initiated)
 
                     CompilerToolchain::Status installed_status =
                         compiler_toolchain_.install_compiler_data(
-                            download_reply->readAll(), tag);
+                            download_reply->readAll(), tag,
+                            download_asset_name);
                     report(installed_status.message);
 
                     if (installed_status.available
