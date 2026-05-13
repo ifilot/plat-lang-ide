@@ -60,14 +60,16 @@ public:
                             const QString &version = "custom");
 
     /**
-     * Installs compiler executable bytes into local toolchain storage.
+     * Installs downloaded compiler bytes into local toolchain storage.
      *
-     * @param compiler_data Compiler executable contents.
+     * @param compiler_data Compiler executable or package contents.
      * @param version Semver tag to store.
+     * @param asset_name Downloaded release asset name.
      * @return Current toolchain status after installation.
      */
     Status install_compiler_data(const QByteArray &compiler_data,
-                                 const QString &version);
+                                 const QString &version,
+                                 const QString &asset_name = {});
 
     /**
      * Loads the selected update channel.
@@ -87,9 +89,11 @@ public:
      * Returns the stored version id for a develop branch commit.
      *
      * @param sha Full Git commit SHA.
+     * @param asset_identity Optional release asset identity.
      * @return Develop version id.
      */
-    static QString develop_version(const QString &sha);
+    static QString develop_version(const QString &sha,
+                                   const QString &asset_identity = {});
 
 private:
     /**
@@ -149,6 +153,54 @@ private:
      * @return Absolute compiler path, or empty string.
      */
     QString find_development_compiler() const;
+
+    /**
+     * Installs a compiler executable extracted from a downloaded package.
+     *
+     * @param package_data Downloaded package bytes.
+     * @param version Version name to store.
+     * @param asset_name Downloaded release asset name.
+     * @return Current toolchain status after installation.
+     */
+    Status install_compiler_package_data(const QByteArray &package_data,
+                                         const QString &version,
+                                         const QString &asset_name);
+
+    /**
+     * Returns whether a release asset should be extracted before installing.
+     *
+     * @param asset_name Downloaded release asset name.
+     * @return True when the asset is a supported archive package.
+     */
+    bool is_compiler_package(const QString &asset_name) const;
+
+    /**
+     * Finds the compiler executable in an extracted release package.
+     *
+     * @param root Extracted package root.
+     * @return Absolute compiler path, or empty string.
+     */
+    QString find_extracted_compiler(const QString &root) const;
+
+    /**
+     * Returns the extracted package root that should be installed.
+     *
+     * @param extracted_root Root directory used for archive extraction.
+     * @param compiler_path Compiler path found inside the extracted archive.
+     * @return Directory whose contents should be copied into toolchain storage.
+     */
+    QString extracted_package_root(const QString &extracted_root,
+                                   const QString &compiler_path) const;
+
+    /**
+     * Copies package runtime files into a versioned toolchain directory.
+     *
+     * @param source_root Directory containing extracted compiler runtime files.
+     * @param target_root Versioned toolchain directory.
+     * @return True when all files were copied.
+     */
+    bool copy_directory_contents(const QString &source_root,
+                                 const QString &target_root) const;
 
     /**
      * Ensures a copied compiler can be executed.

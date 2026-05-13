@@ -28,12 +28,19 @@ https://github.com/ifilot/platlang
 
 - CMake 3.21+
 - C++20 compiler
-- Qt 6 with `Core`, `Gui`, `Widgets`, and `Svg`
+- Qt 6 with `Core`, `Gui`, `Network`, `Widgets`, `Svg`, and `LinguistTools`
+- libarchive
 
 On Ubuntu-like systems:
 
 ```sh
-sudo apt-get install cmake g++ ninja-build qt6-base-dev qt6-svg-dev
+sudo apt-get install cmake g++ libarchive-dev ninja-build qt6-base-dev qt6-svg-dev qt6-tools-dev
+```
+
+On MSYS2 UCRT64:
+
+```sh
+pacman -S mingw-w64-ucrt-x86_64-libarchive mingw-w64-ucrt-x86_64-qt6-tools
 ```
 
 ## Build

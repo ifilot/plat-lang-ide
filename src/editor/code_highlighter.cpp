@@ -9,6 +9,7 @@ enum class SyntaxRole {
     Keyword,
     Literal,
     Logical,
+    Type,
 };
 
 struct SyntaxWord {
@@ -21,21 +22,54 @@ struct SyntaxWord {
 constexpr SyntaxWord kSyntaxWords[] = {
     {"aafbraeke", SyntaxRole::Keyword},
     {"aafdrokke", SyntaxRole::Builtin},
+    {"aafdrökke", SyntaxRole::Builtin},
+    {"aafdrökke", SyntaxRole::Builtin},
     {"angesj", SyntaxRole::Keyword},
+    {"canvas", SyntaxRole::Builtin},
+    {"canvas_lien", SyntaxRole::Builtin},
+    {"canvas_ope", SyntaxRole::Builtin},
+    {"canvas_pauze", SyntaxRole::Builtin},
+    {"canvas_rechhook", SyntaxRole::Builtin},
+    {"canvas_sirkel", SyntaxRole::Builtin},
+    {"canvas_sloet", SyntaxRole::Builtin},
+    {"canvas_teks", SyntaxRole::Builtin},
+    {"canvas_toon", SyntaxRole::Builtin},
+    {"canvas_wach", SyntaxRole::Builtin},
+    {"canvas_wis", SyntaxRole::Builtin},
     {"en", SyntaxRole::Logical},
     {"enj", SyntaxRole::Keyword},
     {"es", SyntaxRole::Keyword},
     {"euversjlaon", SyntaxRole::Keyword},
     {"funksie", SyntaxRole::Keyword},
+    {"inlaaje", SyntaxRole::Keyword},
+    {"inveure", SyntaxRole::Builtin},
     {"loat", SyntaxRole::Keyword},
-    {"neetwoar", SyntaxRole::Literal},
+    {"kwatsj", SyntaxRole::Literal},
     {"niks", SyntaxRole::Literal},
+    {"nommer", SyntaxRole::Type},
+    {"nómmer", SyntaxRole::Type},
+    {"nómmer", SyntaxRole::Type},
     {"of", SyntaxRole::Logical},
+    {"tabel", SyntaxRole::Type},
+    {"teks", SyntaxRole::Type},
     {"trok", SyntaxRole::Keyword},
+    {"trök", SyntaxRole::Keyword},
     {"veur", SyntaxRole::Keyword},
+    {"waatis", SyntaxRole::Builtin},
     {"woar", SyntaxRole::Literal},
     {"zolang", SyntaxRole::Keyword},
 };
+
+QString whole_word_pattern(const char *word)
+{
+    const QString identifier_character =
+        QStringLiteral("[\\p{L}\\p{M}\\p{N}_]");
+    const QString escaped_word = QRegularExpression::escape(
+        QString::fromUtf8(word));
+
+    return QStringLiteral("(?<!%1)%2(?!%1)")
+        .arg(identifier_character, escaped_word);
+}
 
 /**
  * Finds the first platlang comment marker outside a string literal.
@@ -96,6 +130,7 @@ void CodeHighlighter::apply_theme(ThemeManager::Theme theme)
         literal_format_.setForeground(QColor(187, 154, 247));
         logical_format_.setForeground(QColor(122, 162, 247));
         builtin_format_.setForeground(QColor(125, 207, 255));
+        type_format_.setForeground(QColor(224, 175, 104));
         string_format_.setForeground(QColor(158, 206, 106));
         number_format_.setForeground(QColor(255, 158, 100));
         operator_format_.setForeground(QColor(192, 202, 245));
@@ -105,6 +140,7 @@ void CodeHighlighter::apply_theme(ThemeManager::Theme theme)
         literal_format_.setForeground(QColor(108, 74, 160));
         logical_format_.setForeground(QColor(32, 82, 149));
         builtin_format_.setForeground(QColor(118, 72, 158));
+        type_format_.setForeground(QColor(137, 89, 0));
         string_format_.setForeground(QColor(146, 72, 34));
         number_format_.setForeground(QColor(84, 120, 42));
         operator_format_.setForeground(QColor(80, 86, 96));
@@ -115,6 +151,7 @@ void CodeHighlighter::apply_theme(ThemeManager::Theme theme)
     literal_format_.setFontWeight(QFont::Bold);
     logical_format_.setFontItalic(true);
     builtin_format_.setFontWeight(QFont::Bold);
+    type_format_.setFontWeight(QFont::Bold);
     operator_format_.setFontWeight(QFont::Bold);
     comment_format_.setFontItalic(true);
 
@@ -142,10 +179,13 @@ void CodeHighlighter::rebuild_rules()
         case SyntaxRole::Logical:
             format = logical_format_;
             break;
+        case SyntaxRole::Type:
+            format = type_format_;
+            break;
         }
 
         rules_.push_back({
-            QRegularExpression(QStringLiteral("\\b%1\\b").arg(syntax_word.word)),
+            QRegularExpression(whole_word_pattern(syntax_word.word)),
             format
         });
     }

@@ -60,6 +60,7 @@ private:
     QTextCharFormat number_format_;
     QTextCharFormat operator_format_;
     QTextCharFormat string_format_;
+    QTextCharFormat type_format_;
 };
 
 #endif

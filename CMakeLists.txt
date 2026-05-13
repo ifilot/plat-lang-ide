@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets Svg LinguistTools)
+find_package(LibArchive REQUIRED)
 
 configure_file(
     src/app_version.h.in
@@ -116,6 +117,7 @@ qt_add_resources(plat_lang_ide app_resources
 
 target_link_libraries(plat_lang_ide
     PRIVATE
+        LibArchive::LibArchive
         Qt6::Core
         Qt6::Gui
         Qt6::Network
