@@ -125,27 +125,18 @@ CodeHighlighter::CodeHighlighter(QTextDocument *parent)
 
 void CodeHighlighter::apply_theme(ThemeManager::Theme theme)
 {
-    if (theme == ThemeManager::Theme::Dark) {
-        keyword_format_.setForeground(QColor(122, 162, 247));
-        literal_format_.setForeground(QColor(187, 154, 247));
-        logical_format_.setForeground(QColor(122, 162, 247));
-        builtin_format_.setForeground(QColor(125, 207, 255));
-        type_format_.setForeground(QColor(224, 175, 104));
-        string_format_.setForeground(QColor(158, 206, 106));
-        number_format_.setForeground(QColor(255, 158, 100));
-        operator_format_.setForeground(QColor(192, 202, 245));
-        comment_format_.setForeground(QColor(86, 95, 137));
-    } else {
-        keyword_format_.setForeground(QColor(32, 82, 149));
-        literal_format_.setForeground(QColor(108, 74, 160));
-        logical_format_.setForeground(QColor(32, 82, 149));
-        builtin_format_.setForeground(QColor(118, 72, 158));
-        type_format_.setForeground(QColor(137, 89, 0));
-        string_format_.setForeground(QColor(146, 72, 34));
-        number_format_.setForeground(QColor(84, 120, 42));
-        operator_format_.setForeground(QColor(80, 86, 96));
-        comment_format_.setForeground(QColor(100, 115, 125));
-    }
+    const ThemeManager::SyntaxColors &syntax =
+        ThemeManager::theme_definition(theme).syntax;
+
+    keyword_format_.setForeground(QColor(syntax.keyword));
+    literal_format_.setForeground(QColor(syntax.constant));
+    logical_format_.setForeground(QColor(syntax.operator_color));
+    builtin_format_.setForeground(QColor(syntax.function));
+    type_format_.setForeground(QColor(syntax.type));
+    string_format_.setForeground(QColor(syntax.string));
+    number_format_.setForeground(QColor(syntax.number));
+    operator_format_.setForeground(QColor(syntax.operator_color));
+    comment_format_.setForeground(QColor(syntax.comment));
 
     keyword_format_.setFontWeight(QFont::Bold);
     literal_format_.setFontWeight(QFont::Bold);

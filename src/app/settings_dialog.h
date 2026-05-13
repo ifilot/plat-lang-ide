@@ -7,6 +7,7 @@
 #include "interpreter_settings.h"
 #include "theme_manager.h"
 
+class CodeEditor;
 class QComboBox;
 
 /**
@@ -55,8 +56,17 @@ public:
      */
     QString selected_language() const;
 
+signals:
+    /**
+     * Requests a temporary theme preview while the dialog is open.
+     *
+     * @param theme Theme selected in the combo box.
+     */
+    void theme_preview_requested(ThemeManager::Theme theme);
+
 private:
     QComboBox *theme_combo_;
+    CodeEditor *theme_preview_editor_;
     QComboBox *language_combo_;
     QComboBox *compiler_update_channel_combo_;
     QComboBox *interpreter_arguments_combo_;

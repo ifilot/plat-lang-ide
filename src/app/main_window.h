@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 
+#include <vector>
+
 #include "compiler_toolchain.h"
 #include "theme_manager.h"
 
@@ -252,6 +254,14 @@ private slots:
 
 private:
     /**
+     * Applies a theme across the window and optionally persists it.
+     *
+     * @param theme Theme to apply.
+     * @param persist Whether to store the theme in settings.
+     */
+    void use_theme(ThemeManager::Theme theme, bool persist = true);
+
+    /**
      * Updates checked state for theme menu actions.
      *
      * @param theme Active theme.
@@ -310,8 +320,7 @@ private:
     QAction *problems_action_;
     QAction *output_action_;
     QAction *code_assistant_action_;
-    QAction *light_theme_action_;
-    QAction *dark_theme_action_;
+    std::vector<QAction *> theme_actions_;
     TitleBar *title_bar_;
     bool pending_run_after_build_;
 };

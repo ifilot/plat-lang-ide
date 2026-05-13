@@ -83,7 +83,7 @@ void TitleBar::refresh_window_state()
 
 void TitleBar::apply_theme(ThemeManager::Theme theme)
 {
-    set_logo_color(theme == ThemeManager::Theme::Dark
+    set_logo_color(ThemeManager::is_dark(theme)
                        ? QColor("#ffffff")
                        : QColor("#000000"));
 }

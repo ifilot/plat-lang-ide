@@ -98,6 +98,7 @@ private:
      */
     void refresh_extra_selections();
 
+    ThemeManager::Theme theme_;
     LineNumberArea *line_number_area_;
     CodeHighlighter *highlighter_;
     std::vector<Diagnostic> diagnostics_;

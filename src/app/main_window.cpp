@@ -30,6 +30,7 @@
 #include <QTextDocument>
 #include <QTimer>
 #include <QUrl>
+#include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -184,8 +185,6 @@ MainWindow::MainWindow(const QString &startup_folder,
       problems_action_(nullptr),
       output_action_(nullptr),
       code_assistant_action_(nullptr),
-      light_theme_action_(nullptr),
-      dark_theme_action_(nullptr),
       title_bar_(nullptr),
       pending_run_after_build_(false)
 {
@@ -426,16 +425,22 @@ void MainWindow::setup_menu_bar()
     auto *theme_menu = view_menu->addMenu(tr("&Theme"));
     auto *theme_group = new QActionGroup(this);
     theme_group->setExclusive(true);
+    theme_actions_.clear();
 
-    light_theme_action_ = theme_menu->addAction(tr("&Light"), this,
-                                                &MainWindow::use_light_theme);
-    light_theme_action_->setCheckable(true);
-    theme_group->addAction(light_theme_action_);
+    for (const ThemeManager::ThemeDefinition &theme :
+         ThemeManager::available_themes()) {
+        QAction *theme_action = theme_menu->addAction(theme.display_name);
+        theme_action->setCheckable(true);
+        theme_action->setData(QVariant::fromValue(static_cast<int>(theme.id)));
+        theme_group->addAction(theme_action);
+        theme_actions_.push_back(theme_action);
 
-    dark_theme_action_ = theme_menu->addAction(tr("&Dark"), this,
-                                               &MainWindow::use_dark_theme);
-    dark_theme_action_->setCheckable(true);
-    theme_group->addAction(dark_theme_action_);
+        ThemeManager::Theme theme_id = theme.id;
+        connect(theme_action, &QAction::triggered, this, [this, theme_id]() {
+            use_theme(theme_id);
+        });
+    }
+
     update_theme_actions(ThemeManager::load_theme());
 
     auto *run_menu = menuBar()->addMenu(tr("&Run"));
@@ -1220,11 +1225,17 @@ void MainWindow::format_document()
 
 void MainWindow::show_settings()
 {
-    SettingsDialog dialog(ThemeManager::load_theme(),
+    ThemeManager::Theme initial_theme = ThemeManager::load_theme();
+    SettingsDialog dialog(initial_theme,
                           compiler_toolchain_.status(),
                           this);
+    connect(&dialog, &SettingsDialog::theme_preview_requested,
+            this, [this](ThemeManager::Theme theme) {
+                use_theme(theme, false);
+            });
 
     if (dialog.exec() != QDialog::Accepted) {
+        use_theme(initial_theme, false);
         return;
     }
 
@@ -1236,11 +1247,7 @@ void MainWindow::show_settings()
     AppLanguage::save_language(dialog.selected_language());
     AppLanguage::install_translator(*qApp);
 
-    if (selected_theme == ThemeManager::Theme::Dark) {
-        use_dark_theme();
-    } else {
-        use_light_theme();
-    }
+    use_theme(selected_theme);
 }
 
 void MainWindow::open_documentation()
@@ -1256,30 +1263,30 @@ void MainWindow::show_about_dialog()
 
 void MainWindow::use_light_theme()
 {
-    ThemeManager::apply_theme(*qApp, ThemeManager::Theme::Light);
-    editor_tabs_->apply_theme(ThemeManager::Theme::Light);
-    terminal_panel_->apply_theme();
-    title_bar_->apply_theme(ThemeManager::Theme::Light);
-    update_theme_actions(ThemeManager::Theme::Light);
+    use_theme(ThemeManager::Theme::Light);
 }
 
 void MainWindow::use_dark_theme()
 {
-    ThemeManager::apply_theme(*qApp, ThemeManager::Theme::Dark);
-    editor_tabs_->apply_theme(ThemeManager::Theme::Dark);
+    use_theme(ThemeManager::Theme::Dark);
+}
+
+void MainWindow::use_theme(ThemeManager::Theme theme, bool persist)
+{
+    ThemeManager::apply_theme(*qApp, theme, persist);
+    editor_tabs_->apply_theme(theme);
     terminal_panel_->apply_theme();
-    title_bar_->apply_theme(ThemeManager::Theme::Dark);
-    update_theme_actions(ThemeManager::Theme::Dark);
+    title_bar_->apply_theme(theme);
+    update_theme_actions(theme);
 }
 
 void MainWindow::update_theme_actions(ThemeManager::Theme theme)
 {
-    if (light_theme_action_ != nullptr) {
-        light_theme_action_->setChecked(theme == ThemeManager::Theme::Light);
-    }
-
-    if (dark_theme_action_ != nullptr) {
-        dark_theme_action_->setChecked(theme == ThemeManager::Theme::Dark);
+    for (QAction *theme_action : theme_actions_) {
+        if (theme_action != nullptr) {
+            theme_action->setChecked(
+                theme_action->data().toInt() == static_cast<int>(theme));
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 #include "code_editor.h"
 
+#include <QColor>
 #include <QPalette>
 #include <QPainter>
 #include <QPaintEvent>
@@ -26,6 +27,7 @@ void LineNumberArea::paintEvent(QPaintEvent *event)
 
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent),
+      theme_(ThemeManager::load_theme()),
       line_number_area_(new LineNumberArea(this)),
       highlighter_(new CodeHighlighter(document()))
 {
@@ -41,7 +43,7 @@ CodeEditor::CodeEditor(QWidget *parent)
             this, &CodeEditor::highlight_current_line);
 
     update_line_number_area_width(0);
-    highlight_current_line();
+    apply_theme(theme_);
 }
 
 void CodeEditor::set_diagnostics(const std::vector<Diagnostic> &diagnostics)
@@ -52,6 +54,20 @@ void CodeEditor::set_diagnostics(const std::vector<Diagnostic> &diagnostics)
 
 void CodeEditor::apply_theme(ThemeManager::Theme theme)
 {
+    theme_ = theme;
+    const ThemeManager::ThemeDefinition &definition =
+        ThemeManager::theme_definition(theme);
+    QPalette editor_palette = palette();
+    editor_palette.setColor(QPalette::Base, QColor(definition.ui.background));
+    editor_palette.setColor(QPalette::Text, QColor(definition.syntax.plain));
+    editor_palette.setColor(QPalette::AlternateBase, QColor(definition.ui.gutter));
+    editor_palette.setColor(QPalette::Highlight, QColor(definition.ui.selection));
+    editor_palette.setColor(QPalette::HighlightedText,
+                            QColor(definition.ui.foreground));
+    editor_palette.setColor(QPalette::PlaceholderText,
+                            QColor(definition.ui.line_number));
+    setPalette(editor_palette);
+
     highlighter_->apply_theme(theme);
     refresh_extra_selections();
     line_number_area_->update();
@@ -72,18 +88,23 @@ int CodeEditor::line_number_area_width() const
 
 void CodeEditor::paint_line_number_area(QPaintEvent *event)
 {
+    const ThemeManager::ThemeDefinition &definition =
+        ThemeManager::theme_definition(theme_);
     QPainter painter(line_number_area_);
-    painter.fillRect(event->rect(), palette().alternateBase());
+    painter.fillRect(event->rect(), QColor(definition.ui.gutter));
 
     QTextBlock block = firstVisibleBlock();
     int block_number = block.blockNumber();
+    int active_block_number = textCursor().blockNumber();
     int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
     int bottom = top + qRound(blockBoundingRect(block).height());
 
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
             QString number = QString::number(block_number + 1);
-            painter.setPen(palette().placeholderText().color());
+            painter.setPen(QColor(block_number == active_block_number
+                                      ? definition.ui.line_number_active
+                                      : definition.ui.line_number));
             painter.drawText(0, top, line_number_area_->width() - 5,
                              fontMetrics().height(), Qt::AlignRight, number);
         }
@@ -128,17 +149,18 @@ void CodeEditor::update_line_number_area(const QRect &rect, int dy)
 void CodeEditor::highlight_current_line()
 {
     refresh_extra_selections();
+    line_number_area_->update();
 }
 
 void CodeEditor::refresh_extra_selections()
 {
+    const ThemeManager::ThemeDefinition &definition =
+        ThemeManager::theme_definition(theme_);
     QList<QTextEdit::ExtraSelection> selections;
 
     if (!isReadOnly()) {
         QTextEdit::ExtraSelection current_line;
-        QColor current_line_color = palette().highlight().color();
-        current_line_color.setAlpha(36);
-        current_line.format.setBackground(current_line_color);
+        current_line.format.setBackground(QColor(definition.ui.current_line));
         current_line.format.setProperty(QTextFormat::FullWidthSelection, true);
         current_line.cursor = textCursor();
         current_line.cursor.clearSelection();
